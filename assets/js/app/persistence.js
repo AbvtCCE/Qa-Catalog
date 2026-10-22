@@ -430,6 +430,8 @@ async function load() {
     // Settings (global config like Jira base URL)
     if (!state.settings || typeof state.settings !== 'object') state.settings = {};
     if (typeof state.settings.jiraBaseUrl !== 'string') state.settings.jiraBaseUrl = '';
+    // Executions importees des checklists (collection apparue avec l'import des resultats)
+    if (!Array.isArray(state.testRuns)) state.testRuns = [];
     // Migrate: ensure toAutomate (decision flag) exists. If absent, mirror `automated`.
     state.testCases.forEach(c => {
       if (typeof c.toAutomate !== 'boolean') c.toAutomate = !!c.automated;

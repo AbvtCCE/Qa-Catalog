@@ -92,6 +92,7 @@ Limites, à connaître :
 | `stepBlocks` | id, name, steps (blocs de steps réutilisables) |
 | `testers`, `testerLevels` | testeurs (name, levelId, divisionIds, notes) et niveaux (name, order, divisionId) |
 | `businessDivisions` | id, name, parentId (un niveau de sous-division) |
+| `testRuns` | exécutions importées des checklists : id (= sessionId de la checklist), sourceType (plan ou suite), sourceId, projectId, tester, assignedDate, exportedAt, importedAt, importedBy, results[{caseId, outcome (passed, failed, blocked, not_run), blockedReason, remarks, stepRemarks, stepsDone, stepsTotal, startedAt, finishedAt, durationMin, durationEdited}] |
 | `settings` | jiraBaseUrl |
 
 Les listes de référence (types de test, types, sévérités et états d'anomalie, CRUD) sont dans `data-model.js`. Les migrations de données sont dans `load()` de `persistence.js` ; elles sont idempotentes.
@@ -112,5 +113,5 @@ Ne jamais remettre `data.json` dans le dépôt public : il est dans le `.gitigno
 ## Limites connues
 
 - Les captures d'écran sont stockées dans `data.json` (en base64) : le fichier grossit vite. La lecture fonctionne au-delà de 1 Mo, mais il faudra sortir les captures du fichier.
-- Les résultats saisis dans la checklist testeur restent dans le fichier HTML de la checklist et ne reviennent pas dans le catalogue.
+- Les résultats de la checklist testeur reviennent dans le catalogue par un fichier : le testeur clique « Exporter les résultats (.json) », la QA l'importe (onglet Export / Import). Les captures n'y sont pas : elles restent dans le rapport PDF de la checklist.
 - Pas de tests automatisés de l'outil lui-même.

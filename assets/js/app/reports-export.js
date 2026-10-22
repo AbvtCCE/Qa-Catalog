@@ -42,6 +42,151 @@ function importJSONFile(file) {
   reader.readAsText(file);
 }
 
+/* =====================================================================
+   EXÉCUTIONS — résultats des checklists importés comme test runs
+   Un run = un fichier « Exporter les résultats (.json) » d'une checklist.
+   Son id est le sessionId de la checklist : réimporter le même fichier remplace le run.
+   ===================================================================== */
+function runCounts(run) {
+  const c = { passed: 0, failed: 0, blocked: 0, not_run: 0, total: 0, minutes: 0, measured: 0 };
+  (run.results || []).forEach(r => {
+    c[RUN_OUTCOMES.some(o => o.id === r.outcome) ? r.outcome : 'not_run']++;
+    c.total++;
+    if (typeof r.durationMin === 'number') { c.minutes += r.durationMin; c.measured++; }
+  });
+  return c;
+}
+
+function runsForSource(sourceType, sourceId) {
+  return (state.testRuns || [])
+    .filter(r => r.sourceType === sourceType && r.sourceId === sourceId)
+    .sort((a, b) => String(b.exportedAt || b.importedAt).localeCompare(String(a.exportedAt || a.importedAt)));
+}
+
+function runDateLabel(run) {
+  const d = run.exportedAt || run.importedAt;
+  return d ? new Date(d).toLocaleDateString('fr-CH') : '—';
+}
+
+function runSourceLabel(run) {
+  const src = run.sourceType === 'suite'
+    ? state.testSuites.find(s => s.id === run.sourceId)
+    : state.testPlans.find(p => p.id === run.sourceId);
+  if (!src) return `${run.title || 'Sans titre'} (supprimé du catalogue)`;
+  return run.sourceType === 'suite' ? suiteDisplayTitle(src) : planDisplayTitle(src);
+}
+
+function runCountsBadges(run) {
+  const c = runCounts(run);
+  return [
+    `<span class="badge badge-success">${c.passed} ✓</span>`,
+    c.failed ? `<span class="badge badge-danger">${c.failed} ✗</span>` : '',
+    c.blocked ? `<span class="badge badge-warning">${c.blocked} ⛔</span>` : '',
+    c.not_run ? `<span class="badge badge-muted">${c.not_run} non exécuté${c.not_run > 1 ? 's' : ''}</span>` : '',
+    c.measured ? `<span class="badge">${formatMin(c.minutes)} mesurées</span>` : '',
+  ].join('');
+}
+
+function importRunResultsFile(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    let data;
+    try { data = JSON.parse(ev.target.result); } catch (e) { toast('Fichier invalide'); return; }
+    if (!data || data.kind !== 'qa-checklist-results' || !data.sessionId || !Array.isArray(data.results)) {
+      toast('Ce fichier n’est pas un export de résultats de checklist');
+      return;
+    }
+    const validOutcome = o => (RUN_OUTCOMES.some(x => x.id === o) ? o : 'not_run');
+    const run = {
+      id: String(data.sessionId),
+      sourceType: data.sourceType === 'suite' ? 'suite' : 'plan',
+      sourceId: data.sourceId || null,
+      projectId: data.projectId || null,
+      title: String(data.title || ''),
+      tester: String(data.tester || ''),
+      assignedDate: data.assignedDate || '',
+      generatedAt: data.generatedAt || null,
+      reportGeneratedAt: data.reportGeneratedAt || null,
+      exportedAt: data.exportedAt || null,
+      importedAt: new Date().toISOString(),
+      importedBy: (QASession.username && QASession.username()) || '',
+      results: data.results.filter(r => r && r.caseId).map(r => ({
+        caseId: String(r.caseId),
+        outcome: validOutcome(r.outcome),
+        blockedReason: r.outcome === 'blocked' && BLOCKED_REASON_LABELS[r.blockedReason] ? r.blockedReason : null,
+        remarks: String(r.remarks || ''),
+        stepRemarks: Array.isArray(r.stepRemarks)
+          ? r.stepRemarks.filter(s => s && s.remarks).map(s => ({ step: Number(s.step) || 0, remarks: String(s.remarks) }))
+          : [],
+        stepsDone: Number(r.stepsDone) || 0,
+        stepsTotal: Number(r.stepsTotal) || 0,
+        startedAt: r.startedAt || null,
+        finishedAt: r.finishedAt || null,
+        durationMin: typeof r.durationMin === 'number' && r.durationMin >= 0 ? Math.round(r.durationMin) : null,
+        durationEdited: !!r.durationEdited,
+      })),
+    };
+
+    const sourceExists = run.sourceType === 'suite'
+      ? state.testSuites.some(s => s.id === run.sourceId)
+      : state.testPlans.some(p => p.id === run.sourceId);
+    const unknown = run.results.filter(r => !state.testCases.some(tc => tc.id === r.caseId)).length;
+    const existing = (state.testRuns || []).find(r => r.id === run.id);
+    const warnings = [];
+    if (!sourceExists) warnings.push(`${run.sourceType === 'suite' ? 'La suite' : 'Le plan'} de cette checklist n’existe plus dans le catalogue.`);
+    if (unknown) warnings.push(`${unknown} test case${unknown > 1 ? 's' : ''} n’existe${unknown > 1 ? 'nt' : ''} plus dans le catalogue : résultat${unknown > 1 ? 's' : ''} gardé${unknown > 1 ? 's' : ''}, sans cas rattaché.`);
+    if (existing) warnings.push(`Ce fichier a déjà été importé le ${new Date(existing.importedAt).toLocaleString('fr-CH')} : il remplacera l’import précédent.`);
+
+    openModal('Importer une exécution', `
+      <p style="margin:0 0 6px;font-size:14px;"><strong>${escapeHtml(sourceExists ? runSourceLabel(run) : run.title)}</strong></p>
+      <p style="margin:0;font-size:12.5px;color:var(--text-soft);">
+        Testeur : ${escapeHtml(run.tester || '—')} · Assigné le ${escapeHtml(run.assignedDate || '—')} · Résultats exportés le ${escapeHtml(runDateLabel(run))}
+      </p>
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin:12px 0;">${runCountsBadges(run)}</div>
+      ${warnings.length ? `<ul style="margin:0;padding-left:18px;font-size:12.5px;color:#8a6a25;">${warnings.map(w => `<li>${escapeHtml(w)}</li>`).join('')}</ul>` : ''}
+    `, `<button class="btn" data-close-modal>Annuler</button>
+        <button class="btn btn-primary" id="run-import-yes">Importer</button>`);
+    document.getElementById('run-import-yes').onclick = () => {
+      if (!Array.isArray(state.testRuns)) state.testRuns = [];
+      const i = state.testRuns.findIndex(r => r.id === run.id);
+      if (i >= 0) state.testRuns[i] = run; else state.testRuns.push(run);
+      closeModal();
+      save();
+      switchTab(currentTab || 'export');
+      toast('Exécution importée');
+    };
+  };
+  reader.readAsText(file);
+}
+
+function renderRunsList() {
+  const runs = (state.testRuns || []).slice()
+    .sort((a, b) => String(b.exportedAt || b.importedAt).localeCompare(String(a.exportedAt || a.importedAt)));
+  if (runs.length === 0) {
+    return `<p style="font-size:12.5px;color:var(--text-muted);font-style:italic;margin:0;">Aucune exécution importée pour l’instant.</p>`;
+  }
+  const td = 'padding:6px 8px;border-bottom:1px solid var(--border);vertical-align:top;';
+  return `
+    <div style="overflow-x:auto;">
+      <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
+        <thead><tr style="text-align:left;color:var(--text-muted);font-size:11px;text-transform:uppercase;letter-spacing:0.04em;">
+          <th style="${td}">Date</th><th style="${td}">Plan ou suite</th><th style="${td}">Testeur</th><th style="${td}">Résultats</th><th style="${td}"></th>
+        </tr></thead>
+        <tbody>
+          ${runs.map(r => `
+            <tr>
+              <td style="${td}white-space:nowrap;">${escapeHtml(runDateLabel(r))}</td>
+              <td style="${td}">${escapeHtml(runSourceLabel(r))}</td>
+              <td style="${td}">${escapeHtml(r.tester || '—')}</td>
+              <td style="${td}"><div style="display:flex;gap:4px;flex-wrap:wrap;">${runCountsBadges(r)}</div></td>
+              <td style="${td}text-align:right;"><button class="btn-icon btn-ghost" data-delete-run="${escapeHtml(r.id)}" data-perm="export:update" title="Supprimer cette exécution">${ICON.trash}</button></td>
+            </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+}
+
 function renderExport(view) {
   view.innerHTML = `
     <div class="page-header">
@@ -64,6 +209,12 @@ function renderExport(view) {
         <button class="btn" id="imp-json"><span style="transform:rotate(180deg);display:inline-flex;">${ICON.export}</span><span>Importer du JSON</span></button>
       </div>
       <div class="card">
+        <h3 style="font-size:15px;margin-bottom:6px;">Résultats d’exécution</h3>
+        <p style="font-size:12.5px;color:var(--text-soft);margin:0 0 14px;">Importe le fichier « Exporter les résultats (.json) » d’une checklist testeur : il devient une exécution du plan ou de la suite, avec résultats et durées.</p>
+        <input type="file" id="run-file" accept=".json" style="display:none;">
+        <button class="btn btn-primary" id="run-import" data-perm="export:update">${ICON.upload}<span>Importer des résultats</span></button>
+      </div>
+      <div class="card">
         <h3 style="font-size:15px;margin-bottom:6px;">Spec imprimable</h3>
         <p style="font-size:12.5px;color:var(--text-soft);margin:0 0 14px;">Document HTML imprimable pour un plan de tests (ouvre en nouvel onglet).</p>
         <button class="btn" id="exp-spec" ${state.testPlans.length === 0 ? 'disabled' : ''}>${ICON.print}<span>Choisir un plan</span></button>
@@ -74,9 +225,28 @@ function renderExport(view) {
         <button class="btn btn-danger" id="reset-all">${ICON.trash}<span>Tout effacer</span></button>
       </div>
     </div>
+
+    <div class="card" style="margin-top:16px;">
+      <h3 style="font-size:15px;margin-bottom:10px;">Exécutions importées <span class="badge" style="margin-left:6px;">${(state.testRuns || []).length}</span></h3>
+      ${renderRunsList()}
+    </div>
   `;
 
   document.getElementById('exp-json').onclick = exportJSON;
+
+  document.getElementById('run-import').onclick = () => document.getElementById('run-file').click();
+  document.getElementById('run-file').onchange = (e) => {
+    importRunResultsFile(e.target.files[0]);
+    e.target.value = '';
+  };
+  view.querySelectorAll('[data-delete-run]').forEach(b => b.onclick = () => {
+    confirmDialog('Supprimer cette exécution importée ? Le fichier de résultats permet de la réimporter.', () => {
+      state.testRuns = (state.testRuns || []).filter(r => r.id !== b.dataset.deleteRun);
+      save();
+      switchTab('export');
+      toast('Exécution supprimée');
+    });
+  });
 
   document.getElementById('imp-json').onclick = () => document.getElementById('imp-file').click();
   document.getElementById('imp-file').onchange = (e) => {
@@ -611,6 +781,7 @@ function generateChecklist(item, kind, tester, date, projectId) {
     tester,
     assignedDate: date,
     project: projectName,
+    projectId: projectId || null,
     generatedAt: new Date().toISOString(),
     dataTables: usedTables,
     structure,
@@ -741,6 +912,8 @@ function buildChecklistHTML(data) {
   }
   .case-status.complete { background: var(--success-soft); color: #2F6754; }
   .case-status.failed   { background: #F4D9D4; color: #8a3a2c; }
+  .case-status.blocked  { background: #F6E9C9; color: #7a5a14; }
+  .case-status.to-conclude { background: #FFF4DC; color: #7a5a14; border: 1px dashed #E8D49B; }
   .case-body { margin-top: 10px; }
   .case-badges { display: flex; gap: 5px; flex-wrap: wrap; margin: 4px 0 10px; }
   .badge {
@@ -941,6 +1114,31 @@ function buildChecklistHTML(data) {
   .outcome-btn.fail.active {
     background: #F4D9D4; color: #8a3a2c; border-color: #E8C5BD;
   }
+  .outcome-btn.blocked.active {
+    background: #F6E9C9; color: #7a5a14; border-color: #E8D49B;
+  }
+  .case-card.has-blocked { border-color: #E8D49B; }
+  /* Motif du blocage : visible seulement quand le resultat est « Bloqué » */
+  .blocked-reason { display: none; align-items: center; gap: 6px; }
+  .case-card.has-blocked .blocked-reason { display: inline-flex; }
+  .blocked-reason select {
+    font: inherit; font-size: 11.5px; padding: 2px 6px;
+    border: 1px solid #E8D49B; border-radius: 5px; background: var(--surface);
+  }
+  .blocked-reason-text { display: none; font-size: 11.5px; color: #7a5a14; }
+  /* Chronometre par cas */
+  .case-timer { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--text-soft); }
+  .timer-btn {
+    font: inherit; font-size: 11px; width: 26px; height: 24px; padding: 0;
+    border: 1px solid var(--border-strong); border-radius: 5px; background: var(--surface);
+  }
+  .timer-btn.running { background: var(--primary-soft); border-color: var(--primary); color: var(--primary); }
+  .timer-input {
+    width: 54px; font-size: 11.5px; padding: 2px 4px; text-align: right;
+    border: 1px solid var(--border-strong); border-radius: 5px; background: var(--surface);
+  }
+  .timer-est { color: var(--text-muted); }
+  .timer-print { display: none; }
   .case-card.has-failed { border-color: #E8C5BD; }
   .case-card.has-failed .case-head { background: linear-gradient(0deg, #FBEFEC, transparent); }
 
@@ -1026,6 +1224,7 @@ function buildChecklistHTML(data) {
   .summary-count.pass .num { color: var(--success); }
   .summary-count.fail .num { color: #8a3a2c; }
   .summary-count.todo .num { color: var(--text-muted); }
+  .summary-count.blocked .num { color: #7a5a14; }
   .summary-tree {
     border-top: 1px solid var(--border); padding-top: 10px;
     font-size: 12.5px;
@@ -1045,6 +1244,7 @@ function buildChecklistHTML(data) {
   .summary-tree-row .pill-pass { color: var(--success); font-weight: 600; }
   .summary-tree-row .pill-fail { color: #8a3a2c; font-weight: 600; }
   .summary-tree-row .pill-todo { color: var(--text-muted); }
+  .summary-tree-row .pill-blocked { color: #7a5a14; font-weight: 600; }
 
   .display-only { display: none; }
   .report-banner {
@@ -1069,6 +1269,10 @@ function buildChecklistHTML(data) {
   .report-mode .case-card.collapsed .case-toggle { transform: rotate(0deg); }
   .report-mode .report-summary { display: block; }
   .report-mode .case-outcome .outcome-btn:not(.active) { display: none; }
+  .report-mode .blocked-reason select { display: none; }
+  .report-mode .blocked-reason-text { display: inline; }
+  .report-mode .timer-btn, .report-mode .timer-input, .report-mode .timer-unit, .report-mode .timer-est { display: none; }
+  .report-mode .timer-print { display: inline; }
   /* Marqueur "test non realise" : cache en edition, visible dans le rapport
      uniquement quand AUCUN resultat (pass/fail) n'est actif sur le cas. */
   .outcome-none { display: none; }
@@ -1265,6 +1469,7 @@ function buildChecklistHTML(data) {
 <div class="ck-footer">
   <button class="ck-btn edit-only" id="btn-clear">Réinitialiser</button>
   <button class="ck-btn ck-btn-primary edit-only" id="btn-report">Générer le rapport PDF</button>
+  <button class="ck-btn" id="btn-export-results" title="Fichier à remettre à la QA, qui l’importe dans le catalogue (sans les captures)">Exporter les résultats (.json)</button>
   <button class="ck-btn display-only" id="btn-edit">Retour en édition</button>
   <button class="ck-btn ck-btn-primary display-only" id="btn-print">Imprimer / Sauver en PDF</button>
 </div>
@@ -1333,6 +1538,57 @@ function getCaseState(cid) {
   if (cs.collapsed === undefined) cs.collapsed = false;
   if (!cs.steps) cs.steps = {};
   return cs;
+}
+
+/* Motifs de blocage (statut Blocked). Les identifiants sont repris tels quels par l’import du catalogue. */
+const BLOCKED_REASONS = [
+  ["environment", "Test environment indisponible"],
+  ["test_data", "Test data manquantes"],
+  ["entry_criteria", "Livraison hors entry criteria"],
+  ["defect", "Defect bloquant"],
+  ["other", "Autre"]
+];
+function blockedReasonLabel(id) {
+  const r = BLOCKED_REASONS.find(function (x) { return x[0] === id; });
+  return r ? r[1] : "Motif non précisé";
+}
+
+/* Chronometre par cas : demarre a la premiere etape cochee, s’arrete au choix du resultat.
+   La duree est le temps actif (hors pauses). Le testeur peut la corriger (manualMin).
+   Page fermee pendant qu’il tourne : il s’arrete au dernier battement enregistre (TICK_KEY). */
+const TICK_KEY = KEY + ":tick";
+function timerMs(cs) {
+  return (cs.activeMs || 0) + (cs.runningSince ? Date.now() - cs.runningSince : 0);
+}
+function timerStart(cs) {
+  if (cs.runningSince) return;
+  cs.runningSince = Date.now();
+  if (!cs.startedAt) cs.startedAt = new Date().toISOString();
+}
+function timerStop(cs) {
+  if (!cs.runningSince) return;
+  cs.activeMs = timerMs(cs);
+  cs.runningSince = null;
+  cs.finishedAt = new Date().toISOString();
+}
+function caseDurationMin(cs) {
+  if (typeof cs.manualMin === "number") return cs.manualMin;
+  const ms = timerMs(cs);
+  return ms > 0 ? Math.max(1, Math.round(ms / 60000)) : null;
+}
+
+/* Statut affiche sur la carte. « Résultat à choisir » : etapes toutes cochees mais aucun
+   resultat, le rapport marquerait le cas « TEST NON RÉALISÉ » : on ne l’affiche donc pas en vert. */
+function caseStatusInfo(c) {
+  const cs = getCaseState(c.id);
+  const cDone = c.steps.filter(function (_, si) { return getStepState(c.id, si).done; }).length;
+  const allDone = cDone === c.steps.length && c.steps.length > 0;
+  let cls = "", txt = cDone + " / " + c.steps.length;
+  if (cs.outcome === "fail") { cls = "failed"; txt = "✗ " + txt; }
+  else if (cs.outcome === "blocked") { cls = "blocked"; txt = "⛔ " + txt; }
+  else if (cs.outcome === "pass") { cls = "complete"; txt = "✓ " + txt; }
+  else if (allDone) { cls = "to-conclude"; txt = txt + " · résultat à choisir"; }
+  return { cls: cls, txt: txt, toConclude: !cs.outcome && allDone };
 }
 
 function getStepState(cid, si) {
@@ -1428,14 +1684,11 @@ function renderCases() {
       stepsHtml += "</div></div></li>";
     });
 
-    const cDone = c.steps.filter(function (_, si) { return getStepState(c.id, si).done; }).length;
-    const isComplete = cDone === c.steps.length && c.steps.length > 0;
     const collapsedCls = cs.collapsed ? ' collapsed' : '';
-    const failedCls = cs.outcome === 'fail' ? ' has-failed' : '';
-    let statusCls = '';
-    let statusTxt = cDone + ' / ' + c.steps.length;
-    if (cs.outcome === 'fail') { statusCls = ' failed'; statusTxt = '✗ ' + statusTxt; }
-    else if (cs.outcome === 'pass' || isComplete) { statusCls = ' complete'; statusTxt = '✓ ' + statusTxt; }
+    const failedCls = cs.outcome === 'fail' ? ' has-failed' : (cs.outcome === 'blocked' ? ' has-blocked' : '');
+    const st = caseStatusInfo(c);
+    const statusCls = st.cls ? ' ' + st.cls : '';
+    const statusTxt = st.txt;
 
     html += '<article class="case-card' + collapsedCls + failedCls + '" data-card="' + c.id + '">';
     html += '<div class="case-head" data-toggle-card="' + c.id + '">';
@@ -1514,7 +1767,21 @@ function renderCases() {
     html += '<span class="lbl">Résultat :</span>';
     html += '<button type="button" class="outcome-btn pass' + (cs.outcome === 'pass' ? ' active' : '') + '" data-outcome="' + c.id + ':pass">✓ Réussi</button>';
     html += '<button type="button" class="outcome-btn fail' + (cs.outcome === 'fail' ? ' active' : '') + '" data-outcome="' + c.id + ':fail">✗ Échec</button>';
+    html += '<button type="button" class="outcome-btn blocked' + (cs.outcome === 'blocked' ? ' active' : '') + '" data-outcome="' + c.id + ':blocked">⛔ Bloqué</button>';
     html += '<span class="outcome-none">⚠ TEST NON RÉALISÉ</span>';
+    html += '<span class="blocked-reason"><select data-blocked-reason="' + c.id + '"><option value="">Motif du blocage…</option>';
+    BLOCKED_REASONS.forEach(function (r) {
+      html += '<option value="' + r[0] + '"' + (cs.blockedReason === r[0] ? ' selected' : '') + '>' + esc(r[1]) + '</option>';
+    });
+    html += '</select><span class="blocked-reason-text" data-blocked-reason-text="' + c.id + '">Motif : ' + esc(blockedReasonLabel(cs.blockedReason)) + '</span></span>';
+    const dur = caseDurationMin(cs);
+    html += '<span class="case-timer">';
+    html += '<button type="button" class="timer-btn' + (cs.runningSince ? ' running' : '') + '" data-timer="' + c.id + '" title="Démarrer / mettre en pause le chronomètre">' + (cs.runningSince ? '⏸' : '▶') + '</button>';
+    html += '<input type="number" min="0" step="1" class="timer-input" data-duration="' + c.id + '" value="' + (dur != null ? dur : '') + '" placeholder="—" title="Durée réelle en minutes : mesurée par le chronomètre, corrigeable">';
+    html += '<span class="timer-unit">min</span>';
+    if (c.estimatedTime) html += '<span class="timer-est">(estimé ' + c.estimatedTime + ')</span>';
+    html += '<span class="timer-print" data-duration-print="' + c.id + '">Durée : ' + (dur != null ? dur + ' min' : '—') + '</span>';
+    html += '</span>';
     html += '</div>';
 
     const cremEmpty = !cs.remarks;
@@ -1545,8 +1812,48 @@ function bind() {
       const si = parseInt(parts[1], 10);
       const cid = DATA.cases[ci].id;
       getStepState(cid, si).done = cb.checked;
+      // Premiere etape cochee : le chronometre demarre (sauf resultat deja choisi ou duree saisie a la main)
+      const ccs = getCaseState(cid);
+      if (cb.checked && !ccs.outcome && !ccs.runningSince && typeof ccs.manualMin !== "number") {
+        timerStart(ccs);
+        refreshTimer(cid);
+      }
       persist();
       updateProgress();
+      renderReportSummary();
+    };
+  });
+  document.querySelectorAll("[data-timer]").forEach(function (btn) {
+    btn.onclick = function () {
+      const cid = btn.dataset.timer;
+      const cs = getCaseState(cid);
+      if (cs.runningSince) timerStop(cs);
+      else { delete cs.manualMin; timerStart(cs); }
+      persist();
+      refreshTimer(cid);
+      renderReportSummary();
+    };
+  });
+  document.querySelectorAll("[data-duration]").forEach(function (input) {
+    input.onchange = function () {
+      const cid = input.dataset.duration;
+      const cs = getCaseState(cid);
+      const v = parseInt(input.value, 10);
+      timerStop(cs);
+      if (isNaN(v) || v < 0) delete cs.manualMin;   // champ vide : on revient a la duree mesuree
+      else cs.manualMin = v;
+      persist();
+      refreshTimer(cid);
+      renderReportSummary();
+    };
+  });
+  document.querySelectorAll("[data-blocked-reason]").forEach(function (sel) {
+    sel.onchange = function () {
+      const cid = sel.dataset.blockedReason;
+      getCaseState(cid).blockedReason = sel.value || null;
+      persist();
+      const txt = document.querySelector('[data-blocked-reason-text="' + cid + '"]');
+      if (txt) txt.textContent = "Motif : " + blockedReasonLabel(sel.value);
       renderReportSummary();
     };
   });
@@ -1711,11 +2018,14 @@ function bind() {
       const outcome = parts[1];
       const cs = getCaseState(cid);
       cs.outcome = (cs.outcome === outcome) ? null : outcome;
+      if (cs.outcome) timerStop(cs);   // le resultat est choisi : fin de l’execution du cas
       persist();
+      refreshTimer(cid);
       // Update buttons + status pill + card class
       const card = document.querySelector('[data-card="' + cid + '"]');
       if (card) {
         card.classList.toggle('has-failed', cs.outcome === 'fail');
+        card.classList.toggle('has-blocked', cs.outcome === 'blocked');
         card.querySelectorAll('[data-outcome]').forEach(function (b) {
           const o = b.dataset.outcome.split(":")[1];
           b.classList.toggle('active', cs.outcome === o);
@@ -1725,6 +2035,22 @@ function bind() {
       renderReportSummary();
     };
   });
+}
+
+/* Met a jour bouton, champ et texte imprime du chronometre d’un cas, sans toucher au champ
+   pendant que le testeur le modifie. */
+function refreshTimer(cid) {
+  const cs = getCaseState(cid);
+  const dur = caseDurationMin(cs);
+  const btn = document.querySelector('[data-timer="' + cid + '"]');
+  if (btn) {
+    btn.textContent = cs.runningSince ? "⏸" : "▶";
+    btn.classList.toggle("running", !!cs.runningSince);
+  }
+  const input = document.querySelector('[data-duration="' + cid + '"]');
+  if (input && document.activeElement !== input) input.value = dur != null ? dur : "";
+  const pr = document.querySelector('[data-duration-print="' + cid + '"]');
+  if (pr) pr.textContent = "Durée : " + (dur != null ? dur + " min" : "—");
 }
 
 function refreshStepShots(ci, si) {
@@ -1815,21 +2141,26 @@ function showShotZoom(src) {
 function renderReportSummary() {
   const root = document.getElementById("report-summary");
   if (!root) return;
-  // Compute pass / fail / pending across all cases
-  let pass = 0, fail = 0, pending = 0;
+  // Compute pass / fail / blocked / pending across all cases
+  let pass = 0, fail = 0, blocked = 0, pending = 0, toConclude = 0, minutes = 0;
   DATA.cases.forEach(function (c) {
     const cs = getCaseState(c.id);
     if (cs.outcome === 'pass') pass++;
     else if (cs.outcome === 'fail') fail++;
+    else if (cs.outcome === 'blocked') blocked++;
     else pending++;
+    if (caseStatusInfo(c).toConclude) toConclude++;
+    minutes += caseDurationMin(cs) || 0;
   });
   const total = DATA.cases.length;
   let html = '<h2>Résumé d’exécution</h2>';
   html += '<div class="summary-counts">';
   html += '<div class="summary-count pass"><span class="num">' + pass + '</span><span class="lbl">Réussis</span></div>';
   html += '<div class="summary-count fail"><span class="num">' + fail + '</span><span class="lbl">Échecs</span></div>';
+  html += '<div class="summary-count blocked"><span class="num">' + blocked + '</span><span class="lbl">Bloqués</span></div>';
   html += '<div class="summary-count todo"><span class="num">' + pending + '</span><span class="lbl">Non réalisés</span></div>';
   html += '<div class="summary-count"><span class="num">' + total + '</span><span class="lbl">Total</span></div>';
+  html += '<div class="summary-count"><span class="num">' + minutes + '</span><span class="lbl">Minutes mesurées</span></div>';
   html += '</div>';
   // Hierarchy: structure (suites/groupes) → cases
   if (DATA.structure && DATA.structure.length > 0) {
@@ -1837,7 +2168,7 @@ function renderReportSummary() {
     DATA.structure.forEach(function (group) {
       html += '<div class="summary-tree-section">';
       html += '<div class="summary-tree-title">' + esc(group.name) + '</div>';
-      let gPass = 0, gFail = 0, gPending = 0;
+      let gPass = 0, gFail = 0, gBlocked = 0, gPending = 0;
       group.caseIds.forEach(function (cid) {
         const c = DATA.cases.find(function (x) { return x.id === cid; });
         if (!c) return;
@@ -1845,6 +2176,7 @@ function renderReportSummary() {
         let pillCls = 'pill-todo', pillTxt = '⚠ Non réalisé';
         if (cs.outcome === 'pass') { pillCls = 'pill-pass'; pillTxt = '✓ Réussi'; gPass++; }
         else if (cs.outcome === 'fail') { pillCls = 'pill-fail'; pillTxt = '✗ Échec'; gFail++; }
+        else if (cs.outcome === 'blocked') { pillCls = 'pill-blocked'; pillTxt = '⛔ Bloqué · ' + blockedReasonLabel(cs.blockedReason); gBlocked++; }
         else gPending++;
         html += '<div class="summary-tree-row">';
         html += '<span class="name">' + esc(c.title) + '</span>';
@@ -1857,6 +2189,7 @@ function renderReportSummary() {
       html += '<span class="stats">';
       if (gPass > 0) html += '<span class="pill-pass">' + gPass + ' ✓</span>  ';
       if (gFail > 0) html += '<span class="pill-fail">' + gFail + ' ✗</span>  ';
+      if (gBlocked > 0) html += '<span class="pill-blocked">' + gBlocked + ' ⛔</span>  ';
       if (gPending > 0) html += '<span class="pill-todo">' + gPending + ' …</span>';
       html += '</span></div>';
       html += '</div>';
@@ -1866,7 +2199,8 @@ function renderReportSummary() {
   // Update toolbar summary
   const tb = document.getElementById("ck-summary");
   if (tb) {
-    tb.innerHTML = '<strong>' + pass + '</strong> réussis · <strong>' + fail + '</strong> échecs · <strong>' + pending + '</strong> non réalisés';
+    tb.innerHTML = '<strong>' + pass + '</strong> réussis · <strong>' + fail + '</strong> échecs · <strong>' + blocked + '</strong> bloqués · <strong>' + pending + '</strong> non réalisés'
+      + (toConclude > 0 ? ' · <strong>' + toConclude + '</strong> à conclure' : '');
   }
   root.innerHTML = html;
 }
@@ -1878,12 +2212,11 @@ function updateProgress() {
       total++;
       if (getStepState(c.id, si).done) done++;
     });
-    const cDone = c.steps.filter(function (_, si) { return getStepState(c.id, si).done; }).length;
-    const isComplete = cDone === c.steps.length && c.steps.length > 0;
     const statusEl = document.querySelector('[data-case-status="' + c.id + '"]');
     if (statusEl) {
-      statusEl.textContent = cDone + " / " + c.steps.length;
-      statusEl.classList.toggle("complete", isComplete);
+      const st = caseStatusInfo(c);
+      statusEl.className = "case-status" + (st.cls ? " " + st.cls : "");
+      statusEl.textContent = st.txt;
     }
   });
   const pct = total ? Math.round((done / total) * 100) : 0;
@@ -1900,9 +2233,11 @@ function generateReport() {
   // testeur decide. Les cas sans resultat seront marques "TEST NON RÉALISÉ" dans le rapport.
   const missing = countMissingShots();
   const notDone = countNotExecuted();
+  const toConclude = DATA.cases.filter(function (c) { return caseStatusInfo(c).toConclude; }).length;
   if (missing > 0 || notDone > 0) {
     var msg = "Certains points ne sont pas complétés :\\n";
     if (notDone > 0) msg += "\\n• " + notDone + " test" + (notDone > 1 ? "s" : "") + " sans résultat → marqué" + (notDone > 1 ? "s" : "") + " « TEST NON RÉALISÉ » dans le rapport";
+    if (toConclude > 0) msg += "\\n  dont " + toConclude + " aux étapes toutes cochées : choisir Réussi, Échec ou Bloqué";
     if (missing > 0) msg += "\\n• " + missing + " capture" + (missing > 1 ? "s" : "") + " obligatoire" + (missing > 1 ? "s" : "") + " manquante" + (missing > 1 ? "s" : "");
     msg += "\\n\\nGénérer le rapport quand même ?";
     if (!confirm(msg)) return;
@@ -1926,10 +2261,91 @@ function clearAll() {
   renderCases();
 }
 
+/* Resultats a remettre a la QA : le catalogue les importe comme une execution du plan ou de la suite.
+   Sans les captures (elles restent dans le rapport PDF) pour garder un fichier leger. */
+const OUTCOME_EXPORT = { pass: "passed", fail: "failed", blocked: "blocked" };
+function buildResultsExport() {
+  return {
+    kind: "qa-checklist-results",
+    version: 1,
+    sessionId: DATA.sessionId,
+    sourceType: DATA.sourceType,
+    sourceId: DATA.sourceId,
+    projectId: DATA.projectId || null,
+    title: DATA.title,
+    project: DATA.project,
+    tester: DATA.tester,
+    assignedDate: DATA.assignedDate,
+    generatedAt: DATA.generatedAt,
+    reportGeneratedAt: progress.reportGeneratedAt || null,
+    exportedAt: new Date().toISOString(),
+    results: DATA.cases.map(function (c) {
+      const cs = getCaseState(c.id);
+      const stepRemarks = [];
+      c.steps.forEach(function (_, si) {
+        const r = getStepState(c.id, si).remarks;
+        if (r) stepRemarks.push({ step: si + 1, remarks: r });
+      });
+      return {
+        caseId: c.id,
+        title: c.title,
+        outcome: OUTCOME_EXPORT[cs.outcome] || "not_run",
+        blockedReason: cs.outcome === "blocked" ? (cs.blockedReason || null) : null,
+        remarks: cs.remarks || "",
+        stepRemarks: stepRemarks,
+        stepsDone: c.steps.filter(function (_, si) { return getStepState(c.id, si).done; }).length,
+        stepsTotal: c.steps.length,
+        startedAt: cs.startedAt || null,
+        finishedAt: cs.finishedAt || null,
+        durationMin: caseDurationMin(cs),
+        durationEdited: typeof cs.manualMin === "number",
+        estimatedMin: c.estimatedTime || null
+      };
+    })
+  };
+}
+function exportResults() {
+  const safe = function (s) { return String(s || "").replace(/[^a-zA-Z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40) || "checklist"; };
+  const blob = new Blob([JSON.stringify(buildResultsExport(), null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = "resultats-" + safe(DATA.title) + "-" + safe(DATA.tester) + ".json";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  setTimeout(function () { URL.revokeObjectURL(a.href); }, 1000);
+}
+
 document.getElementById("btn-report").onclick = generateReport;
 document.getElementById("btn-edit").onclick = exitReport;
 document.getElementById("btn-print").onclick = function () { window.print(); };
 document.getElementById("btn-clear").onclick = clearAll;
+document.getElementById("btn-export-results").onclick = exportResults;
+
+// Reouverture de la page : un chronometre reste en marche seulement jusqu’au dernier battement,
+// pour ne pas compter le temps ou la page etait fermee.
+(function () {
+  const lastTick = parseInt(localStorage.getItem(TICK_KEY) || "0", 10);
+  let changed = false;
+  DATA.cases.forEach(function (c) {
+    const cs = getCaseState(c.id);
+    if (!cs.runningSince) return;
+    cs.activeMs = (cs.activeMs || 0) + Math.max(0, (lastTick || cs.runningSince) - cs.runningSince);
+    cs.runningSince = null;
+    changed = true;
+  });
+  if (changed) persist();
+})();
+// Battement : leger (une seule cle), il date la derniere seconde ou la page etait ouverte.
+setInterval(function () {
+  let running = false;
+  DATA.cases.forEach(function (c) {
+    if (getCaseState(c.id).runningSince) { running = true; refreshTimer(c.id); }
+  });
+  if (running) {
+    try { localStorage.setItem(TICK_KEY, String(Date.now())); } catch (e) { /* non bloquant */ }
+  }
+}, 15000);
 
 renderCases();
 

@@ -129,7 +129,23 @@ let state = {
   dataTables: [],
   businessDivisions: [],
   stepBlocks: [],
+  testRuns: [],          // executions importees depuis les checklists (voir importRunResultsFile)
   settings: { jiraBaseUrl: '' },
+};
+
+/* ===== Test runs (executions) ===== */
+const RUN_OUTCOMES = [
+  { id: 'passed',  label: 'Réussi',       short: '✓' },
+  { id: 'failed',  label: 'Échec',        short: '✗' },
+  { id: 'blocked', label: 'Bloqué',       short: '⛔' },
+  { id: 'not_run', label: 'Non exécuté',  short: '…' },
+];
+const BLOCKED_REASON_LABELS = {
+  environment: 'Test environment indisponible',
+  test_data: 'Test data manquantes',
+  entry_criteria: 'Livraison hors entry criteria',
+  defect: 'Defect bloquant',
+  other: 'Autre',
 };
 let currentTab = 'dashboard';
 let fileHandle = null;

@@ -2552,6 +2552,16 @@ function renderTestPlans(view) {
                   }).join('')}
                   ${meta.types.length > 3 ? `<span class="badge">+${meta.types.length - 3}</span>` : ''}
                 </div>
+                ${(() => {
+                  const runs = runsForSource('plan', plan.id);
+                  if (runs.length === 0) return '';
+                  const last = runs[0];
+                  return `
+                    <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center;margin-top:8px;font-size:11.5px;color:var(--text-soft);">
+                      <span>Dernière exécution${runs.length > 1 ? ` (${runs.length} au total)` : ''} : ${escapeHtml(runDateLabel(last))} · ${escapeHtml(last.tester || '—')}</span>
+                      ${runCountsBadges(last)}
+                    </div>`;
+                })()}
                 ${(plan.items || []).length > 0 ? `
                   <ol style="margin-top:12px;padding-top:10px;border-top:1px solid var(--border);font-size:12.5px;color:var(--text-soft);">
                     ${(plan.items || []).slice(0, 5).map((item, i) => {
