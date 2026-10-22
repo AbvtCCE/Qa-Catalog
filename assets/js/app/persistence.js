@@ -98,6 +98,75 @@ let _githubSyncTimer = null;  // debounce ecriture
 let _githubSyncBusy = false;
 let _dirty = false;           // changements locaux non confirmes sur GitHub (persiste en IndexedDB)
 let _dirtyGen = 0;            // incremente a chaque save(); permet de ne pas effacer le drapeau si une edition arrive pendant un push
+let _syncBase = null;         // dernier etat commun avec GitHub = base de la fusion a 3 voies (persiste en IndexedDB, cle 'base')
+let _conflictRetries = 0;     // nouvelles tentatives apres un 409 (quelqu'un a ecrit entre notre lecture et notre ecriture)
+
+const deepClone = (o) => JSON.parse(JSON.stringify(o));
+const sameJson = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+
+/* Fusion a 3 voies d'une collection d'entites identifiees par id :
+   - modifiee d'un seul cote -> ce cote gagne (suppression comprise) ;
+   - modifiee des deux cotes -> la version locale gagne (conflit compte) ;
+   - modifiee d'un cote et supprimee de l'autre -> la modification gagne (conflit compte) ;
+   - sans base connue (base null) -> union sans suppression, locale prioritaire.
+   Ordre : celui du distant, puis les nouvelles entites locales. */
+function mergeById(base, local, remote) {
+  const index = arr => new Map(arr.map(x => [x.id, x]));
+  const B = base ? index(base) : null, L = index(local), R = index(remote);
+  let conflicts = 0;
+  const pick = (id) => {
+    const b = B && B.get(id), l = L.get(id), r = R.get(id);
+    if (!B) return l || r;
+    if (l && r) {
+      if (sameJson(l, r) || sameJson(r, b)) return l;
+      if (sameJson(l, b)) return r;
+      conflicts++;
+      return l;
+    }
+    if (l) { // absente du distant
+      if (!b) return l;                    // creee localement
+      if (sameJson(l, b)) return null;     // supprimee a distance, intacte ici
+      conflicts++;
+      return l;
+    }
+    if (r) { // absente en local
+      if (!b) return r;                    // creee a distance
+      if (sameJson(r, b)) return null;     // supprimee ici, intacte a distance
+      conflicts++;
+      return r;
+    }
+    return null;
+  };
+  const items = [];
+  const seen = new Set();
+  remote.forEach(x => { seen.add(x.id); const v = pick(x.id); if (v) items.push(v); });
+  local.forEach(x => { if (seen.has(x.id)) return; const v = pick(x.id); if (v) items.push(v); });
+  return { items, conflicts };
+}
+
+/* Fusionne l'etat local avec l'etat distant ecrit par quelqu'un d'autre depuis la base.
+   Collections d'entites (tableaux d'objets a id) : entite par entite ; autres cles (settings) : en bloc. */
+function mergeStates(base, local, remote) {
+  const merged = {};
+  let conflicts = 0;
+  const isEntityList = v => Array.isArray(v) && v.every(x => x && typeof x === 'object' && x.id);
+  new Set([...Object.keys(remote), ...Object.keys(local)]).forEach(k => {
+    const b = base ? base[k] : undefined, l = local[k], r = remote[k];
+    if (isEntityList(l) && isEntityList(r)) {
+      const res = mergeById(base ? (Array.isArray(b) ? b : []) : null, l, r);
+      merged[k] = res.items;
+      conflicts += res.conflicts;
+    } else if (l === undefined) merged[k] = r;
+    else if (r === undefined) merged[k] = l;
+    else if (base && sameJson(l, b)) merged[k] = r;
+    else if (base && sameJson(r, b)) merged[k] = l;
+    else {
+      merged[k] = l;
+      if (!sameJson(l, r)) conflicts++;
+    }
+  });
+  return { state: merged, conflicts };
+}
 
 function setSyncIndicator(state, text) {
   const el = document.getElementById('sync-indicator');
@@ -126,11 +195,29 @@ async function pushToGitHub() {
     const remote = await QAGitHub.fetchData();
     if (remote.source !== 'api') throw new Error('lecture du dépôt impossible');
     const doc = remote.data;
-    doc.state = state;
+    if (remote.sha !== _githubSha) {
+      // Quelqu'un a ecrit depuis notre derniere synchro : on fusionne au lieu d'ecraser son travail.
+      const before = JSON.stringify(state);
+      const res = mergeStates(_syncBase, state, doc.state || {});
+      Object.assign(state, res.state);
+      await dbSet('state', state);
+      if (JSON.stringify(state) !== before) {
+        toast(res.conflicts
+          ? `Modifications d'un autre utilisateur fusionnées · ${res.conflicts} conflit(s) : votre version a été gardée`
+          : `Modifications d'un autre utilisateur fusionnées`);
+        // Pas de re-rendu sous une fenetre ouverte : l'onglet sera redessine a la prochaine navigation.
+        if (!document.getElementById('modal-backdrop').classList.contains('open')) switchTab(currentTab || 'dashboard');
+      }
+    }
+    const pushed = deepClone(state);
+    doc.state = pushed;
     doc.updatedAt = new Date().toISOString();
     doc.updatedBy = (QASession.username && QASession.username()) || 'unknown';
     const sha = await QAGitHub.saveData(doc, remote.sha, `Update state by ${doc.updatedBy}`);
     _githubSha = sha;
+    _syncBase = pushed;
+    _conflictRetries = 0;
+    await dbSetMany({ base: pushed, baseSha: sha });
     if (_dirtyGen === gen) {
       _dirty = false;
       await dbSet('dirty', false);
@@ -142,7 +229,13 @@ async function pushToGitHub() {
     }
   } catch (e) {
     console.warn('Push GitHub echoue', e);
-    if (e.message === 'CONFLICT') {
+    if (e.message === 'CONFLICT' && _conflictRetries < 3) {
+      // Ecriture concurrente entre notre lecture et notre ecriture : on relit et on refusionne.
+      _conflictRetries++;
+      setSyncIndicator('busy', 'Écriture concurrente · nouvelle fusion…');
+      scheduleGithubSync();
+    } else if (e.message === 'CONFLICT') {
+      _conflictRetries = 0;
       setSyncIndicator('err', 'Conflit · rechargez la page');
       toast('Conflit de sync : un autre utilisateur a ecrit. Rechargez.');
     } else {
@@ -196,13 +289,18 @@ async function load() {
     }
     const hasPat = !!(window.QAGitHub && QAGitHub.getPat());
     const remoteFresh = !!(remote && remote.data && remote.data.state && remote.source !== 'cache');
+    let baseFromRemote = false;
 
     if (_dirty && stored) {
       // Des modifications locales n'ont pas encore ete confirmees sur GitHub.
       // REGLE DE SECURITE : l'etat local PRIME et n'est JAMAIS ecrase par le distant
       // tant que ces changements ne sont pas pousses — sinon on perdrait le travail.
+      // Le push les fusionnera avec le distant a partir de la derniere base commune.
       state = Object.assign(state, stored);
-      if (remoteFresh) _githubSha = remote.sha; // vise la derniere version distante pour le prochain push
+      // On reprend le sha de CETTE base (et non celui du distant actuel) : si quelqu'un a ecrit
+      // entre-temps, le push le verra et fusionnera au lieu d'ecraser.
+      _syncBase = (await dbGet('base')) || null;
+      _githubSha = _syncBase ? ((await dbGet('baseSha')) || null) : null;
       if (hasPat) {
         setSyncIndicator('warn', 'Modifications locales · synchronisation…');
         scheduleGithubSync();                    // pousse les changements en attente
@@ -213,6 +311,7 @@ async function load() {
       // Aucun changement local en attente : la version GitHub fait foi.
       state = Object.assign(state, remote.data.state);
       _githubSha = remote.sha;
+      baseFromRemote = true;
       await dbSet('state', state);
       _dirty = false;
       await dbSet('dirty', false);
@@ -335,6 +434,11 @@ async function load() {
     state.testCases.forEach(c => {
       if (typeof c.toAutomate !== 'boolean') c.toAutomate = !!c.automated;
     });
+    // Base de fusion = la version GitHub, normalisee comme l'etat local pour comparer a l'identique.
+    if (baseFromRemote) {
+      _syncBase = deepClone(state);
+      await dbSetMany({ base: _syncBase, baseSha: _githubSha });
+    }
   } catch (e) {
     console.warn('Load failed', e);
   }
