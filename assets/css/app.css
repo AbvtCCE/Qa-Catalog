@@ -443,6 +443,19 @@
     flex-direction: column;
     max-height: calc(100vh - 40px);
   }
+  .modal.modal-wide { max-width: 1080px; }
+  /* Weekly test progress report : formulaire à gauche, aperçu à droite */
+  .wr-layout { display: grid; grid-template-columns: 300px 1fr; gap: 18px; align-items: start; }
+  @media (max-width: 900px) { .wr-layout { grid-template-columns: 1fr; } }
+  .wr-preview {
+    border: 1px solid var(--border); border-radius: var(--radius-sm);
+    padding: 14px 18px; background: var(--surface); font-size: 13px; line-height: 1.5;
+  }
+  .wr-preview h1 { font-size: 18px; margin: 0 0 6px; }
+  .wr-preview h2 { font-size: 14px; margin: 14px 0 6px; }
+  .wr-preview p, .wr-preview ul { margin: 0 0 6px; }
+  .wr-preview table { margin: 0 0 6px; font-size: 12.5px; }
+  .wr-preview small { color: var(--text-muted); }
   .modal-header {
     padding: 18px 24px;
     border-bottom: 1px solid var(--border);

@@ -55,6 +55,8 @@ function switchTab(id) {
 
 /* ===== Modal helpers ===== */
 function openModal(title, bodyHtml, footerHtml, onMount) {
+  // Largeur standard par défaut : une fenêtre large (weekly report) ajoute 'modal-wide' après coup.
+  document.getElementById('modal').classList.remove('modal-wide');
   document.getElementById('modal-title').textContent = title;
   document.getElementById('modal-body').innerHTML = bodyHtml;
   document.getElementById('modal-footer').innerHTML = footerHtml;

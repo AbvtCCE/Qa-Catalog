@@ -3296,6 +3296,7 @@ function renderProjects(view) {
 
   document.getElementById('add-project').onclick = () => openProjectModal();
   view.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProjectModal(b.dataset.editProject));
+  view.querySelectorAll('[data-weekly-project]').forEach(b => b.onclick = () => openWeeklyReportModal(b.dataset.weeklyProject));
   view.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => {
     const pid = b.dataset.deleteProject;
     confirmDialog('Supprimer ce projet ? Les plans rattachés ne sont pas touchés (ils restent dans le catalogue).', () => {
@@ -3324,6 +3325,7 @@ function renderProjectCard(p, s) {
           ` : ''}
         </div>
         <div style="display:flex;gap:2px;flex-shrink:0;">
+          <button class="btn-icon btn-ghost" data-weekly-project="${p.id}" title="Weekly test progress report">${ICON.calendar}</button>
           <button class="btn-icon btn-ghost" data-edit-project="${p.id}" title="Modifier">${ICON.edit}</button>
           <button class="btn-icon btn-ghost" data-delete-project="${p.id}" title="Supprimer">${ICON.trash}</button>
         </div>
