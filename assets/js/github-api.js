@@ -1,14 +1,11 @@
 /* Client GitHub API minimal pour lire/ecrire data.json.
-   - Lecture via raw.githubusercontent.com (pas d'auth, fonctionne tant que le repo est public)
-   - Ecriture via PUT /repos/:owner/:repo/contents/:path (PAT requis)
-   - Cache local en localStorage pour survivre aux ratees reseau */
+   - Les donnees vivent dans un depot PRIVE (QA_CONFIG.owner/repo), distinct du depot public
+     qui publie le code via GitHub Pages. Lecture ET ecriture passent par l'API authentifiee :
+     sans PAT ayant acces a ce depot, aucune donnee n'est lisible.
+   - Au-dela de 1 Mo, l'API ne renvoie plus le contenu en base64 : on le relit en brut.
+   - Cache local en localStorage pour survivre aux ratees reseau (jamais en cas de refus d'acces) */
 (function () {
   const CFG = window.QA_CONFIG;
-
-  function rawUrl() {
-    // cache-buster: GitHub raw met en cache ~5min
-    return `https://raw.githubusercontent.com/${CFG.owner}/${CFG.repo}/${CFG.branch}/${CFG.dataPath}?t=${Date.now()}`;
-  }
 
   function apiUrl() {
     return `https://api.github.com/repos/${CFG.owner}/${CFG.repo}/contents/${CFG.dataPath}?ref=${CFG.branch}`;
@@ -32,49 +29,60 @@
     localStorage.setItem(CFG.cacheKey, JSON.stringify({ data, sha, cachedAt: Date.now() }));
   }
 
-  /* Lit data.json. Essaye API authentifiee si PAT (pour repos prives), sinon raw public. */
+  /* Repli hors ligne : uniquement pour une panne reseau ou serveur, pas pour un refus d'acces. */
+  function fromCacheOrThrow(err) {
+    const cached = cacheGet();
+    if (cached) {
+      console.warn('Fetch GitHub echoue, fallback cache local', err);
+      return { data: cached.data, sha: cached.sha, source: 'cache', error: err.message };
+    }
+    throw err;
+  }
+
+  /* Lit data.json dans le depot prive. PAT obligatoire.
+     Erreurs typees : PAT_REQUIRED (aucun jeton), PAT_INVALID (401), NO_ACCESS (403/404 :
+     le jeton ne voit pas le depot). Voir describeError() pour le message a afficher. */
   async function fetchData() {
     const pat = getPat();
-    const noCache = { cache: 'no-store' };
+    if (!pat) throw new Error('PAT_REQUIRED');
+    const opts = accept => ({
+      cache: 'no-store',
+      headers: { 'Authorization': `Bearer ${pat}`, 'Accept': accept },
+    });
+    let res;
     try {
-      if (pat) {
-        const res = await fetch(apiUrl(), {
-          ...noCache,
-          headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
-        });
-        if (res.ok) {
-          const json = await res.json();
-          const content = atob(json.content.replace(/\n/g, ''));
-          const data = JSON.parse(new TextDecoder().decode(Uint8Array.from(content, c => c.charCodeAt(0))));
-          cacheSet(data, json.sha);
-          return { data, sha: json.sha, source: 'api' };
+      // Media type "object" : renvoie toujours le sha ; le contenu base64 seulement jusqu'a 1 Mo.
+      res = await fetch(apiUrl(), opts('application/vnd.github.object+json'));
+      if (res.ok) {
+        const meta = await res.json();
+        let data;
+        if (meta.encoding === 'base64' && meta.content) {
+          const content = atob(meta.content.replace(/\n/g, ''));
+          data = JSON.parse(new TextDecoder().decode(Uint8Array.from(content, c => c.charCodeAt(0))));
+        } else {
+          // Fichier > 1 Mo : contenu vide en "object", on le relit en brut (jusqu'a 100 Mo).
+          const raw = await fetch(apiUrl(), opts('application/vnd.github.raw+json'));
+          if (!raw.ok) throw new Error(`GitHub API ${raw.status}`);
+          data = await raw.json();
         }
-        if (res.status !== 401 && res.status !== 403) {
-          throw new Error(`GitHub API ${res.status}`);
-        }
+        cacheSet(data, meta.sha);
+        return { data, sha: meta.sha, source: 'api' };
       }
-      const res = await fetch(rawUrl(), noCache);
-      if (!res.ok) throw new Error(`GET raw ${res.status}`);
-      const data = await res.json();
-      // sha unknown from raw - fetch separately via API (unauthed, works for public repos)
-      let sha = null;
-      try {
-        const meta = await fetch(apiUrl(), {
-          ...noCache,
-          headers: { 'Accept': 'application/vnd.github+json' }
-        });
-        if (meta.ok) sha = (await meta.json()).sha;
-      } catch (e) { /* ignore */ }
-      cacheSet(data, sha);
-      return { data, sha, source: 'raw' };
     } catch (e) {
-      const cached = cacheGet();
-      if (cached) {
-        console.warn('Fetch GitHub echoue, fallback cache local', e);
-        return { data: cached.data, sha: cached.sha, source: 'cache', error: e.message };
-      }
-      throw e;
+      return fromCacheOrThrow(e);
     }
+    if (res.status === 401) throw new Error('PAT_INVALID');
+    if (res.status === 403 || res.status === 404) throw new Error('NO_ACCESS');
+    return fromCacheOrThrow(new Error(`GitHub API ${res.status}`));
+  }
+
+  /* Message lisible pour les erreurs typees de fetchData(). */
+  function describeError(e) {
+    const code = e && e.message;
+    if (code === 'PAT_REQUIRED') return 'Jeton GitHub requis pour accéder aux données.';
+    if (code === 'PAT_INVALID') return 'Jeton GitHub invalide ou expiré.';
+    if (code === 'NO_ACCESS') return `Ce jeton GitHub n'a pas accès au dépôt des données (${CFG.owner}/${CFG.repo}).`;
+    return code || 'Erreur inconnue';
   }
 
   /* Ecrit data.json sur GitHub. Necessite un PAT avec scope "contents:write". */
@@ -121,6 +129,8 @@
       const res = await fetch(`https://api.github.com/repos/${CFG.owner}/${CFG.repo}`, {
         headers: { 'Authorization': `Bearer ${pat}`, 'Accept': 'application/vnd.github+json' }
       });
+      // Depot prive : GitHub repond 404 (et non 403) quand le jeton ne le voit pas.
+      if (res.status === 404) return { ok: false, reason: `pas d'accès au dépôt ${CFG.owner}/${CFG.repo}` };
       if (!res.ok) return { ok: false, reason: `HTTP ${res.status}` };
       const json = await res.json();
       // ATTENTION: json.permissions refletent le role du COMPTE sur le depot, PAS ce que
@@ -136,5 +146,5 @@
     }
   }
 
-  window.QAGitHub = { fetchData, saveData, getPat, setPat, checkPat, cacheGet };
+  window.QAGitHub = { fetchData, saveData, getPat, setPat, checkPat, cacheGet, describeError };
 })();

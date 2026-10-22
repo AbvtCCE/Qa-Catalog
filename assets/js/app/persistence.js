@@ -120,13 +120,16 @@ async function pushToGitHub() {
   const gen = _dirtyGen;
   setSyncIndicator('busy', 'Synchro GitHub…');
   try {
-    // On garde users/role inchanges, on ne touche qu'a state.
-    const remote = await QAGitHub.fetchData().catch(() => null);
-    const doc = (remote && remote.data) || { users: [], state: {} };
+    // On garde users/role inchanges, on ne touche qu'a state. Sans lecture FRAICHE du
+    // distant, on n'ecrit pas : on ecraserait users avec une liste vide ou perimee.
+    // Le drapeau dirty reste leve, la prochaine sauvegarde ou le rechargement retentera.
+    const remote = await QAGitHub.fetchData();
+    if (remote.source !== 'api') throw new Error('lecture du dépôt impossible');
+    const doc = remote.data;
     doc.state = state;
     doc.updatedAt = new Date().toISOString();
     doc.updatedBy = (QASession.username && QASession.username()) || 'unknown';
-    const sha = await QAGitHub.saveData(doc, (remote && remote.sha) || _githubSha, `Update state by ${doc.updatedBy}`);
+    const sha = await QAGitHub.saveData(doc, remote.sha, `Update state by ${doc.updatedBy}`);
     _githubSha = sha;
     if (_dirtyGen === gen) {
       _dirty = false;
@@ -143,7 +146,7 @@ async function pushToGitHub() {
       setSyncIndicator('err', 'Conflit · rechargez la page');
       toast('Conflit de sync : un autre utilisateur a ecrit. Rechargez.');
     } else {
-      setSyncIndicator('err', 'Sync impossible · ' + e.message);
+      setSyncIndicator('err', 'Sync impossible · ' + QAGitHub.describeError(e));
     }
   } finally {
     _githubSyncBusy = false;

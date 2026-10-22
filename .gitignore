@@ -1,2 +1,5 @@
 # Dossier de session de l'assistant (ne pas versionner)
 .claude/
+
+# Les données vivent dans le dépôt PRIVÉ AbvtCCE/Qa-Catalog-Data : ne jamais les remettre ici
+data.json

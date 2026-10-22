@@ -1,5 +1,6 @@
 /* Session utilisateur courante (stockee dans localStorage, scope navigateur).
-   Pas de vraie securite cote serveur : le but est de cloisonner l'UI et identifier qui a modifie quoi. */
+   La vraie protection des donnees est le depot prive : sans PAT GitHub y ayant acces, rien n'est lisible.
+   La session ne fait que cloisonner l'UI et identifier qui a modifie quoi. */
 (function () {
   const CFG = window.QA_CONFIG;
 
@@ -35,11 +36,16 @@
     return s ? s.username : null;
   }
 
-  /* Garde de route : redirige vers login si pas connecte.
+  /* Sans PAT, le depot prive des donnees est illisible : on renvoie vers login pour le saisir. */
+  function hasDataAccess() {
+    return !!(window.QAGitHub && window.QAGitHub.getPat());
+  }
+
+  /* Garde de route : redirige vers login si pas connecte ou sans PAT.
      adminOnly: redirige les non-admins vers catalog. */
   function requireAuth(opts) {
     opts = opts || {};
-    if (!isAuthenticated()) {
+    if (!isAuthenticated() || !hasDataAccess()) {
       const here = encodeURIComponent(location.pathname.split('/').pop() || 'index.html');
       location.replace(`login.html?next=${here}`);
       return false;
@@ -56,5 +62,5 @@
     location.replace('login.html');
   }
 
-  window.QASession = { get, set, clear, isAuthenticated, isAdmin, role, username, requireAuth, logout };
+  window.QASession = { get, set, clear, isAuthenticated, hasDataAccess, isAdmin, role, username, requireAuth, logout };
 })();

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Administration · Catalogue de Tests</title>
-<link rel="stylesheet" href="assets/css/auth.css">
+<link rel="stylesheet" href="assets/css/auth.css?v=2026.10.22.1">
 </head>
 <body>
 <div class="admin-shell">
@@ -23,7 +23,7 @@
 
   <div class="card">
     <h2>Connexion GitHub</h2>
-    <div class="subtitle">Un Personal Access Token GitHub est necessaire pour ecrire data.json.<br>
+    <div class="subtitle">Un Personal Access Token GitHub est necessaire pour lire et ecrire data.json, stocke dans le depot prive <code id="data-repo"></code>. Chaque utilisateur doit y etre invite (Settings &gt; Collaborators) et utiliser son propre jeton.<br>
       <strong>Le plus simple :</strong> un token <strong>classic</strong> (commence par <code>ghp_</code>), scope <code>repo</code>, expiration <strong>No expiration</strong>.<br>
       <strong>Piege :</strong> un token <strong>fine-grained</strong> (<code>github_pat_...</code>) doit avoir explicitement <code>Contents: Read and write</code> sur ce depot — sinon l'ecriture echoue <em>meme si le bouton Tester affiche OK</em>.</div>
     <div class="inline-form">
@@ -101,14 +101,15 @@
   </div>
 </div>
 
-<script src="assets/js/config.js"></script>
-<script src="assets/js/crypto-utils.js"></script>
-<script src="assets/js/github-api.js"></script>
-<script src="assets/js/session.js"></script>
-<script src="assets/js/permissions.js"></script>
+<script src="assets/js/config.js?v=2026.10.22.1"></script>
+<script src="assets/js/crypto-utils.js?v=2026.10.22.1"></script>
+<script src="assets/js/github-api.js?v=2026.10.22.1"></script>
+<script src="assets/js/session.js?v=2026.10.22.1"></script>
+<script src="assets/js/permissions.js?v=2026.10.22.1"></script>
 <script>
 (async function () {
   if (!QASession.requireAuth({ adminOnly: true })) return;
+  document.getElementById('data-repo').textContent = `${QA_CONFIG.owner}/${QA_CONFIG.repo}`;
   if (!QAPerm.canManageUsers()) { location.replace('index.html'); return; }
   const sess = QASession.get();
   document.getElementById('who').textContent = `Connecte en tant que ${sess.username} (${QAPerm.roleLabel(sess.role)})`;

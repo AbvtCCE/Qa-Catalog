@@ -1,7 +1,9 @@
-/* Configuration globale - repo GitHub cible pour la persistance partagee. */
+/* Configuration globale.
+   Le code est publie par GitHub Pages depuis le depot public Catalogue-de-tests ;
+   les donnees (data.json) vivent dans le depot PRIVE ci-dessous, lu et ecrit avec le PAT de chaque utilisateur. */
 window.QA_CONFIG = {
   owner: 'AbvtCCE',
-  repo: 'Catalogue-de-tests',
+  repo: 'Qa-Catalog-Data',
   branch: 'main',
   dataPath: 'data.json',
   passwordSalt: 'qa-catalog-salt',

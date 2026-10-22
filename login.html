@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Connexion · Catalogue de Tests</title>
-<link rel="stylesheet" href="assets/css/auth.css">
+<link rel="stylesheet" href="assets/css/auth.css?v=2026.10.22.1">
 </head>
 <body>
 <div class="auth-shell">
@@ -23,23 +23,29 @@
         <label for="p">Mot de passe</label>
         <input type="password" id="p" name="password" autocomplete="current-password" required>
       </div>
+      <div class="form-row" id="pat-row" style="display:none;">
+        <label for="t">Jeton GitHub (accès aux données)</label>
+        <input type="password" id="t" autocomplete="off" placeholder="github_pat_... ou ghp_...">
+        <div class="help" style="margin-top:6px;">Demandé une fois par navigateur. Il doit avoir accès au dépôt privé <code id="data-repo"></code>.</div>
+      </div>
       <button type="submit" class="btn btn-primary btn-block" id="submit">Se connecter</button>
     </form>
 
     <div class="help" style="margin-top:18px;text-align:center;">
-      Les donnees sont stockees dans le repo GitHub.<br>
+      Les données sont stockées dans un dépôt GitHub privé.<br>
+      <a href="#" id="pat-change">Utiliser un autre jeton GitHub</a><br>
       Mot de passe oublie ? Contactez votre admin.
     </div>
   </div>
 </div>
 
-<script src="assets/js/config.js"></script>
-<script src="assets/js/crypto-utils.js"></script>
-<script src="assets/js/github-api.js"></script>
-<script src="assets/js/session.js"></script>
+<script src="assets/js/config.js?v=2026.10.22.1"></script>
+<script src="assets/js/crypto-utils.js?v=2026.10.22.1"></script>
+<script src="assets/js/github-api.js?v=2026.10.22.1"></script>
+<script src="assets/js/session.js?v=2026.10.22.1"></script>
 <script>
 (async function () {
-  if (QASession.isAuthenticated()) {
+  if (QASession.isAuthenticated() && QASession.hasDataAccess()) {
     location.replace('index.html');
     return;
   }
@@ -47,6 +53,14 @@
   const msg = document.getElementById('msg');
   const form = document.getElementById('login-form');
   const submit = document.getElementById('submit');
+  const patRow = document.getElementById('pat-row');
+  document.getElementById('data-repo').textContent = `${QA_CONFIG.owner}/${QA_CONFIG.repo}`;
+  if (!QAGitHub.getPat()) patRow.style.display = '';
+  document.getElementById('pat-change').addEventListener('click', (e) => {
+    e.preventDefault();
+    patRow.style.display = '';
+    document.getElementById('t').focus();
+  });
 
   function showMsg(text, kind) {
     msg.innerHTML = `<div class="alert alert-${kind}">${text}</div>`;
@@ -62,6 +76,20 @@
     const password = document.getElementById('p').value;
 
     try {
+      const token = document.getElementById('t').value.trim();
+      if (token) {
+        const r = await QAGitHub.checkPat(token);
+        if (!r.ok) {
+          showMsg('Jeton GitHub refusé : ' + r.reason, 'error');
+          return;
+        }
+        QAGitHub.setPat(token);
+        document.getElementById('t').value = '';
+      } else if (!QAGitHub.getPat()) {
+        patRow.style.display = '';
+        showMsg('Saisissez votre jeton GitHub.', 'error');
+        return;
+      }
       const { data } = await QAGitHub.fetchData();
       const user = (data.users || []).find(u => u.username.toLowerCase() === username.toLowerCase());
       if (!user) {
@@ -86,7 +114,12 @@
       location.replace(allowed.includes(next) ? (next || 'index.html') : 'index.html');
     } catch (err) {
       console.error(err);
-      showMsg('Impossible de joindre GitHub. Verifiez votre connexion.', 'error');
+      if (['PAT_REQUIRED', 'PAT_INVALID', 'NO_ACCESS'].includes(err.message)) {
+        patRow.style.display = '';
+        showMsg(QAGitHub.describeError(err), 'error');
+      } else {
+        showMsg('Impossible de joindre GitHub. Verifiez votre connexion.', 'error');
+      }
     } finally {
       submit.disabled = false;
       submit.textContent = 'Se connecter';
