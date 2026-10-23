@@ -12,6 +12,8 @@
       anomalies: ['create', 'read', 'update', 'delete'],
       projects: ['create', 'read', 'update', 'delete'],
       dataTables: ['create', 'read', 'update', 'delete'],
+      // Product risk analysis : notée avec le métier (plan qualité, S5-1)
+      risks: ['create', 'read', 'update', 'delete'],
     },
     testeur: {
       dashboard: ['read'],
@@ -83,6 +85,7 @@
     'data-edit-block': 'stepblocks',     'data-delete-block': 'stepblocks',
     'data-edit-table': 'dataTables',     'data-delete-table': 'dataTables',
     'data-edit-anomaly': 'anomalies',    'data-delete-anomaly': 'anomalies',
+    'data-edit-risk': 'risks',           'data-delete-risk': 'risks',
     'data-level-edit': 'testers',        'data-level-delete': 'testers',
     'data-tester-edit': 'testers',       'data-tester-delete': 'testers',
     'data-division-edit': 'testers',     'data-division-delete': 'testers',

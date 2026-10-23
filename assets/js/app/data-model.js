@@ -183,6 +183,7 @@ let state = {
   businessDivisions: [],
   stepBlocks: [],
   testRuns: [],          // executions importees depuis les checklists (voir importRunResultsFile)
+  productRisks: [],      // product risk analysis (voir risks.js)
   settings: { jiraBaseUrl: '' },
 };
 

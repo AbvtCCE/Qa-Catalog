@@ -107,6 +107,17 @@ function newCompletionReport(plan) {
   };
 }
 
+/* Test cases prioritaires du domaine du plan : ceux des risques élevés de ses divisions.
+   riskBased = false quand on ne peut pas le savoir (aucun risque noté, plan sans division). */
+function crPriorityCases(plan) {
+  const divs = new Set(plan.divisionIds || []);
+  const risks = state.productRisks || [];
+  if (!risks.length || !divs.size) return { riskBased: false, ids: [] };
+  const ids = new Set();
+  risks.filter(r => riskClass(r) === 'high' && divs.has(r.divisionId)).forEach(r => (r.testCaseIds || []).forEach(id => ids.add(id)));
+  return { riskBased: true, ids: Array.from(ids) };
+}
+
 /* Dernier résultat (hors « non exécuté ») de chaque test case de l'ensemble donné. */
 function crLatestResults(runs, caseIds) {
   const latest = new Map();
@@ -158,11 +169,27 @@ function completionReportData(plan, rep) {
   // Exit criteria, selon le risk level du plan
   const status = {}, detail = {};
   const allExecuted = scopeCases.length > 0 && executed === scopeCases.length;
-  status.executed = allExecuted && (risk !== 'medium' || rep.priorityConfirmed) ? 'met' : 'not_met';
-  detail.executed = `${executed} / ${scopeCases.length} test cases du plan exécutés`
-    + (risk === 'medium' ? (rep.priorityConfirmed
+  // Risque moyen : test cases prioritaires du domaine = ceux des risques élevés des divisions du
+  // plan (product risk analysis, S5). Sans analyse ou sans division, la QA le constate à la main.
+  const prio = crPriorityCases(plan);
+  let prioOk = !!rep.priorityConfirmed, prioDetail;
+  if (prio.riskBased) {
+    const latestPrio = crLatestResults(runs, new Set(prio.ids));
+    const prioExecuted = prio.ids.filter(id => {
+      const l = latestPrio.get(id);
+      return l && (l.res.outcome === 'passed' || l.res.outcome === 'failed');
+    }).length;
+    prioOk = prioExecuted === prio.ids.length;
+    prioDetail = prio.ids.length
+      ? ` ; ${prioExecuted} / ${prio.ids.length} test cases prioritaires du domaine (risques élevés) exécutés`
+      : ' ; aucun test case prioritaire (risque élevé) dans ce domaine';
+  } else {
+    prioDetail = rep.priorityConfirmed
       ? ` ; test cases prioritaires du domaine exécutés (confirmé par ${rep.priorityConfirmedBy || 'la QA'})`
-      : ' ; test cases prioritaires du domaine : non confirmés') : '');
+      : ' ; test cases prioritaires du domaine : non confirmés';
+  }
+  status.executed = allExecuted && (risk !== 'medium' || prioOk) ? 'met' : 'not_met';
+  detail.executed = `${executed} / ${scopeCases.length} test cases du plan exécutés` + (risk === 'medium' ? prioDetail : '');
 
   const nBlocker = openDefects.filter(a => a.severity === 'critical').length;
   const majors = openDefects.filter(a => a.severity === 'major');
@@ -540,7 +567,7 @@ function openCompletionReportEditor(planId, reportId) {
         </div>
         <label style="${crFieldLabel}" for="cr-untested">Raison des test cases non testés</label>
         <textarea id="cr-untested" rows="2" style="${crField}">${escapeHtml(rep.untestedReason)}</textarea>
-        ${risk === 'medium' && !adapt.executed ? `
+        ${risk === 'medium' && !adapt.executed && !crPriorityCases(plan).riskBased ? `
           <label style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;margin-top:10px;"><input type="checkbox" id="cr-priority" ${rep.priorityConfirmed ? 'checked' : ''} style="margin-top:3px;">
             <span>Les test cases prioritaires du domaine ont été exécutés <span style="color:var(--text-muted);">(exit criterion du risque moyen, constaté par la QA)</span></span></label>` : ''}
 

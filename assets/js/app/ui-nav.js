@@ -8,6 +8,7 @@ const TABS = [
   { id: 'blocks',       label: "Blocs d'étapes", resource: 'stepblocks',  group: 'Tests',    icon: ICON.layers,    render: renderStepBlocks   },
   { id: 'testsuites',   label: 'Suites',          resource: 'testsuites',   group: 'Tests',    icon: ICON.suite,     render: renderTestSuites   },
   { id: 'testplans',    label: 'Plans',           resource: 'testplans',    group: 'Tests',    icon: ICON.plan,      render: renderTestPlans    },
+  { id: 'risks',        label: 'Risques',         resource: 'risks',        group: 'Tests',    icon: ICON.alert,     render: renderRisks        },
   { id: 'anomalies',    label: 'Anomalies',       resource: 'anomalies',    group: null,       icon: ICON.bug,       render: renderAnomalies    },
   { id: 'projects',     label: 'Projets',         resource: 'projects',     group: 'Données', icon: ICON.calendar,  render: renderProjects     },
   { id: 'data',         label: 'Tables de données', resource: 'dataTables', group: 'Données', icon: ICON.table, render: renderDataTables   },

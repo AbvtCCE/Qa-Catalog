@@ -389,7 +389,7 @@ function openEnvironmentModal(id) {
 /* =====================================================================
    CAS DE TESTS
    ===================================================================== */
-let tcFilters = { search: '', envId: '', type: '', ready: '', automated: '', crud: '', minLevel: '', division: '', steps: '' };
+let tcFilters = { search: '', envId: '', type: '', ready: '', automated: '', crud: '', minLevel: '', division: '', steps: '', risk: '' };
 let tcSelection = new Set(); // ids of selected cases for bulk edit
 
 function renderTestCases(view) {
@@ -408,6 +408,9 @@ function renderTestCases(view) {
     if (tcFilters.automated === 'backlog' && !(c.toAutomate && !c.automated)) return false;
     if (tcFilters.automated === 'manual_only' && c.toAutomate) return false;
     if (tcFilters.crud === '__none' && c.crud) return false;
+    // Priorité dérivée du risque (S5)
+    if (tcFilters.risk === '__none' && caseRiskClass(c.id)) return false;
+    if (tcFilters.risk && tcFilters.risk !== '__none' && caseRiskClass(c.id) !== tcFilters.risk) return false;
     if (tcFilters.crud && tcFilters.crud !== '__none' && c.crud !== tcFilters.crud) return false;
     if (tcFilters.minLevel === '__none' && c.minLevelId) return false;
     if (tcFilters.minLevel && tcFilters.minLevel !== '__none' && c.minLevelId !== tcFilters.minLevel) return false;
@@ -480,6 +483,13 @@ function renderTestCases(view) {
         <option value="thin" ${tcFilters.steps === 'thin' ? 'selected' : ''}>Moins de 3 étapes</option>
         <option value="ok" ${tcFilters.steps === 'ok' ? 'selected' : ''}>3 étapes ou plus</option>
       </select>
+      ${(state.productRisks || []).length > 0 ? `
+        <select id="f-risk">
+          <option value="">Priorité (toutes)</option>
+          ${RISK_CLASSES.map(rc => `<option value="${rc.id}" ${tcFilters.risk === rc.id ? 'selected' : ''}>${rc.priority} — risque ${rc.label.toLowerCase()}</option>`).join('')}
+          <option value="__none" ${tcFilters.risk === '__none' ? 'selected' : ''}>Sans risque lié</option>
+        </select>
+      ` : ''}
       <select id="f-crud">
         <option value="">CRUD (tous)</option>
         ${CRUD_OPS.map(op => `<option value="${op.id}" ${tcFilters.crud === op.id ? 'selected' : ''}>${op.short} — ${escapeHtml(op.label)}</option>`).join('')}
@@ -539,6 +549,9 @@ function renderTestCases(view) {
     document.getElementById('f-steps').onchange = (e) => { tcFilters.steps = e.target.value; renderTestCases(view); };
   }
   document.getElementById('f-crud').onchange = (e) => { tcFilters.crud = e.target.value; renderTestCases(view); };
+  if (document.getElementById('f-risk')) {
+    document.getElementById('f-risk').onchange = (e) => { tcFilters.risk = e.target.value; renderTestCases(view); };
+  }
   if (document.getElementById('f-level')) {
     document.getElementById('f-level').onchange = (e) => { tcFilters.minLevel = e.target.value; renderTestCases(view); };
   }
@@ -1488,7 +1501,7 @@ function testCaseRow(tc, opts) {
       <div class="testcase-status ${tc.ready ? 'ready' : ''}" title="${tc.ready ? 'Prêt' : 'À préparer'}"></div>
       ${crudPill}
       <div class="testcase-title" title="${escapeHtml(tc.title)}">${escapeHtml(tc.title || '(Sans titre)')}</div>
-      <div class="testcase-meta">${jiraPills}${moreJira}${divisionBadges}${types}${moreTypes}</div>
+      <div class="testcase-meta">${casePriorityBadge(tc.id)}${jiraPills}${moreJira}${divisionBadges}${types}${moreTypes}</div>
       <div class="testcase-step-count ${stepClass}" title="${escapeHtml(stepTooltip)}">${ICON.list}<span>${stepCount} étape${stepCount > 1 ? 's' : ''}</span></div>
       <div class="testcase-meta">${tc.estimatedTime ? ICON.clock + ' ' + formatMin(tc.estimatedTime) : ''}</div>
       <div class="testcase-meta">${tc.automated

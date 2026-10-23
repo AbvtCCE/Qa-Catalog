@@ -35,6 +35,7 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/renderers.js` | Tous les écrans |
 | `assets/js/app/reports-export.js` | Exports, checklist testeur, spec imprimable |
 | `assets/js/app/free-report.js` | Générateur de rapports |
+| `assets/js/app/risks.js` | Onglet Risques : product risk analysis (likelihood × impact), priorité des test cases dérivée du risque, sélection des regression tests par le risque |
 | `assets/js/app/weekly-report.js` | Weekly test progress report d'un projet (calcul, aperçu, copie pour Confluence, .md) |
 | `assets/js/app/completion-report.js` | Dans chaque test plan : référence du changement, livraisons et entry criteria, exit criteria (et leurs adaptations), test completion report figé pour le CAB |
 | `assets/js/app/ui-nav.js`, `main.js` | Navigation, fenêtres, démarrage |
@@ -108,7 +109,8 @@ Sans configuration, les références restent du texte et les libellés sont neut
 | `testers`, `testerLevels` | testeurs (name, levelId, divisionIds, notes) et niveaux (name, order, divisionId) |
 | `businessDivisions` | id, name, parentId (un niveau de sous-division) |
 | `testRuns` | exécutions importées des checklists : id (= sessionId de la checklist), sourceType (plan ou suite), sourceId, projectId, tester, assignedDate, exportedAt, importedAt, importedBy, results[{caseId, outcome (passed, failed, blocked, not_run), blockedReason, remarks, stepRemarks, stepsDone, stepsTotal, startedAt, finishedAt, durationMin, durationEdited}] |
-| `settings` | tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
+| `productRisks` | id, code (R-01…), divisionId, domain, title (ce qui pourrait mal tourner), likelihood (1 à 3), impact (1 à 3), testCaseIds, technique, notes ; risk level = likelihood × impact : élevé 6 ou 9 (P1), moyen 3 ou 4 (P2), faible 1 ou 2 (P3) |
+| `settings` | riskAnalysis{participants, date, review} ; tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
 
 Les listes de référence (types de test, types, sévérités et états d'anomalie, CRUD) sont dans `data-model.js`. Les migrations de données sont dans `load()` de `persistence.js` ; elles sont idempotentes.
 
