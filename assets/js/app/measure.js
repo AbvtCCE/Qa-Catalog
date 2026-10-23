@@ -131,6 +131,8 @@ function measureAuto(month) {
       K6: { a: deliveries.filter(deliveryCompliant).length, b: deliveries.length },
       K7: { v: deliveries.reduce((s, d) => s + (Number(d.lostDays) || 0), 0) + outages.reduce((s, o) => s + (Number(o.lostDays) || 0), 0) },
       K8: { v: testers.size },
+      // Score de la check-list : la dernière évaluation de maturité du mois (onglet Maturité)
+      K9: { v: typeof maturityScoreAt === 'function' ? maturityScoreAt(month + '-31') : null },
     },
     sources: { fr },
   };
@@ -216,7 +218,13 @@ function renderMeasure(view, monthArg) {
   const dis = canEdit ? '' : 'disabled';
   const autoTag = (has) => has ? ' <span class="badge badge-primary" style="font-size:10px;padding:0 5px;" title="Proposé par le catalogue, modifiable">catalogue</span>' : '';
   const unitLabel = u => (u === 'rate' ? `${cur}/h` : u === 'money' ? cur : u);
-  const notes = (rec && rec.report) || {};
+  let notes = (rec && rec.report) || {};
+  // Statuts TMMi niveau 2 proposés par la dernière évaluation de maturité, tant qu'ils ne sont pas saisis
+  if (!notes.tmmi && typeof maturityTmmiL2At === 'function' && maturityTmmiL2At(month + '-31')) notes = Object.assign({}, notes, { tmmi: maturityTmmiL2At(month + '-31') });
+  // Baseline du score de la check-list : la première évaluation de maturité, tant qu'elle n'est pas saisie
+  const autoBase = {};
+  if (typeof maturityFirstScore === 'function' && maturityFirstScore() !== null) autoBase.K9 = { v: maturityFirstScore() };
+  const baseOf = id => Object.assign({}, autoBase[id] || {}, m.baseline[id] || {});
   const kpiInput = (k, x, prefix) => k.type === 'ratio'
     ? `<input data-${prefix}="${k.id}:a" style="${field}width:70px;" value="${escapeHtml(x && x.a != null ? x.a : '')}" ${dis}> sur <input data-${prefix}="${k.id}:b" style="${field}width:70px;" value="${escapeHtml(x && x.b != null ? x.b : '')}" ${dis}>`
     : `<input data-${prefix}="${k.id}:v" style="${field}width:90px;" value="${escapeHtml(x && x.v != null ? x.v : '')}" ${dis}> ${escapeHtml(k.unit || '')}`;
@@ -285,12 +293,12 @@ function renderMeasure(view, monthArg) {
       <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
         <thead><tr><th style="${th}">Indicateur</th><th style="${th}">Baseline</th><th style="${th}">${escapeHtml(msMonthLabel(month))}</th><th style="${th}">Évolution</th></tr></thead>
         <tbody>${MEASURE_KPIS.map(k => {
-          const b = kpiValue(k, m.baseline[k.id]), c = kpiValue(k, kpiCur[k.id]);
+          const b = kpiValue(k, baseOf(k.id)), c = kpiValue(k, kpiCur[k.id]);
           const ev = kpiEvolution(k, b, c);
-          const hasAuto = !!auto.kpi[k.id];
+          const hasAuto = !!auto.kpi[k.id] && kpiValue(k, auto.kpi[k.id]) !== null;
           return `<tr>
             <td style="${td}" title="${escapeHtml(k.question)}"><strong>${escapeHtml(k.name)}</strong><div style="color:var(--text-muted);font-size:11.5px;">${escapeHtml(k.formula)} · ${escapeHtml(k.id === 'K1' && toolName('changes') ? toolName('changes') : k.source)}</div></td>
-            <td style="${td}white-space:nowrap;">${kpiInput(k, m.baseline[k.id], 'ms-base')}<div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(kpiLabel(k, b))}</div></td>
+            <td style="${td}white-space:nowrap;">${kpiInput(k, baseOf(k.id), 'ms-base')}${autoBase[k.id] && !m.baseline[k.id] ? autoTag(true) : ''}<div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(kpiLabel(k, b))}</div></td>
             <td style="${td}white-space:nowrap;">${kpiInput(k, kpiCur[k.id], 'ms-kpi')}${autoTag(hasAuto)}<div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(kpiLabel(k, c))}</div></td>
             <td style="${td}white-space:nowrap;color:${ev.good === null ? 'var(--text-muted)' : ev.good ? 'var(--success)' : '#8a3a2c'};font-weight:600;">${escapeHtml(ev.text)}</td>
           </tr>`;

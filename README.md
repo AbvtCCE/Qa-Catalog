@@ -35,6 +35,8 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/renderers.js` | Tous les écrans |
 | `assets/js/app/reports-export.js` | Exports, checklist testeur, spec imprimable |
 | `assets/js/app/free-report.js` | Générateur de rapports |
+| `assets/js/app/maturity-data.js` | Les 112 points de la check-list QA d’après l’ISTQB (généré à partir de la page de la check-list, ne pas modifier à la main) |
+| `assets/js/app/maturity.js` | Onglet Maturité : profil (criticité, taille), questionnaire, scores, niveau indicatif d’après TMMi, plan d’amélioration par étapes, réévaluations |
 | `assets/js/app/measure.js` | Onglet Mesurer : méthode (D4), calculateur des économies et des coûts évités, cumul mensuel, avant et après des 9 indicateurs, rapport mensuel pour la direction ; résumé sur le tableau de bord |
 | `assets/js/app/automation.js` | Onglet Automatisation : objectifs, répartition, inventaire (exécutions, durée à la main, maintenance, signal d’alarme, décision), candidats et grille, règles de maintenance |
 | `assets/js/app/test-env-data.js` | Journal d’indisponibilité des test environments, fiche copiable, circuit des test data requests, catalogue des test data sets |
@@ -115,6 +117,7 @@ Sans configuration, les références restent du texte et les libellés sont neut
 | `businessDivisions` | id, name, parentId (un niveau de sous-division) |
 | `testRuns` | exécutions importées des checklists : id (= sessionId de la checklist), sourceType (plan ou suite), sourceId, projectId, tester, assignedDate, exportedAt, importedAt, importedBy, results[{caseId, outcome (passed, failed, blocked, not_run), blockedReason, remarks, stepRemarks, stepsDone, stepsTotal, startedAt, finishedAt, durationMin, durationEdited}] |
 | `productRisks` | id, code (R-01…), divisionId, domain, title (ce qui pourrait mal tourner), likelihood (1 à 3), impact (1 à 3), testCaseIds, technique, notes ; risk level = likelihood × impact : élevé 6 ou 9 (P1), moyen 3 ou 4 (P2), faible 1 ou 2 (P3) |
+| `maturity` | profile{criticality (safety, business, standard, low), size (solo, small, multi, large), company, standard}, assessments[{id, date, label, answers{pointId : {v : yes, partial, no ou na ; note}}, createdAt, by}], currentId |
 | `measure` | method{rate, currency, referenceFrom, referenceTo, validatedBy, validatedAt, qaPeople}, baseline{K1..K9 : {a, b} ou {v}}, months[{month, calc{taux, duree, nbreg, maint, analyse, execs, anom, cout}, kpi{K1..K9}, report{brief, risks, next, tmmi}, savedAt, savedBy}] |
 | `settings` | automation{goal, scope, staysManual, toolsEnvs, stakeholders, rules} ; testData{usualDelayDays, sendTo} ; riskAnalysis{participants, date, review} ; tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
 

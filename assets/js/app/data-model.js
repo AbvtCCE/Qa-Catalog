@@ -204,6 +204,7 @@ let state = {
   testDataRequests: [],  // circuit des test data requests (voir test-env-data.js)
   testDataSets: [],      // catalogue des test data sets par processus
   measure: { method: {}, baseline: {}, months: [] }, // Mesurer et chiffrer (voir measure.js)
+  maturity: { profile: {}, assessments: [] },        // évaluations de maturité (voir maturity.js)
   settings: { jiraBaseUrl: '' },
 };
 

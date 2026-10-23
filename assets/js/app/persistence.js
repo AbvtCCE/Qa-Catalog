@@ -460,6 +460,8 @@ async function load() {
     if (!Array.isArray(state.testDataSets)) state.testDataSets = [];
     // Mesurer et chiffrer (S8)
     if (!state.measure || typeof state.measure !== 'object') state.measure = { method: {}, baseline: {}, months: [] };
+    // Maturité de la QA
+    if (!state.maturity || typeof state.maturity !== 'object') state.maturity = { profile: {}, assessments: [] };
     // DDP : un defect est trouvé en test, sauf s'il est marqué trouvé en production
     state.anomalies.forEach(a => { if (a.foundIn !== 'production') a.foundIn = 'test'; });
     (state.environments || []).forEach(e => { if (!Array.isArray(e.outages)) e.outages = []; });
