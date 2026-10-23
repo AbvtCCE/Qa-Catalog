@@ -36,7 +36,7 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/reports-export.js` | Exports, checklist testeur, spec imprimable |
 | `assets/js/app/free-report.js` | Générateur de rapports |
 | `assets/js/app/weekly-report.js` | Weekly test progress report d'un projet (calcul, aperçu, copie pour Confluence, .md) |
-| `assets/js/app/completion-report.js` | Test completion report par changement : exit criteria par risk level, recommandation, rapport figé pour le CAB |
+| `assets/js/app/completion-report.js` | Dans chaque test plan : changement ServiceNow, livraisons et entry criteria, exit criteria (et leurs adaptations), test completion report figé pour le CAB |
 | `assets/js/app/ui-nav.js`, `main.js` | Navigation, fenêtres, démarrage |
 
 L'ordre des `<script>` dans `index.html` compte : les fichiers partagent des variables globales.
@@ -86,8 +86,8 @@ Limites, à connaître :
 |---|---|
 | `testCases` | id, title, steps[{type, action, expected, requiresScreenshot, blockId}], environmentIds, divisionIds, types, crud, minLevelId, estimatedTime, ready, automated, toAutomate, isInterface, jiraTickets[{key, summary}], linkedCaseIds, screenshots, sortOrder |
 | `testSuites` | id, title, testCaseIds, divisionIds |
-| `testPlans` | id, title, items[{type: suite ou case, id}], testCaseIds, divisionIds |
-| `projects` | id, name, startDate, endDate, planIds, weeklyNotes{lundi AAAA-MM-JJ : {status, reason, blockers, lostDays, risks, next}}, completionReports[{id, changeNumber, deliveryVersion, reportDate, riskLevel, planIds, regressionRunId, regressionKind, untestedReason, decisions{anomalyId : texte}, risks, recommendation, recommendationText, uatName, uatDate, evidenceLinks, frozenAt, frozenBy, snapshot{html, markdown, recommendation, criteria}}] |
+| `testPlans` | id, title, items[{type: suite ou case, id}], testCaseIds, divisionIds, changeNumber (ServiceNow), riskLevel (low, medium, high), kind (change, smoke, targeted, full), deliveries[{id, version, receivedAt, checks{6 entry criteria}, decision (accepted, accepted_with_reserve, refused), lostDays, note}], exitAdaptations{criterion : {text, reason}}, completionReports[{id, reportDate, deliveryId, regressionRunId, priorityConfirmed, manualStatus, untestedReason, decisions{anomalyId : texte}, risks, recommendation, recommendationText, uatName, uatDate, evidenceLinks, frozenAt, frozenBy, snapshot{html, markdown, changeNumber, riskLevel, recommendation, criteria}}] |
+| `projects` | id, name, startDate, endDate, planIds, weeklyNotes{lundi AAAA-MM-JJ : {status, reason, blockers, lostDays, risks, next}} |
 | `anomalies` | id, title, description, type, severity, state, testCaseIds, workaround, solution, peopleInvolved, screenshots, createdAt, resolvedAt |
 | `environments` | id, title, address |
 | `dataTables` | id, name, columns[{id, name}], rows ; utilisées dans les steps par `{{table.colonne}}` |

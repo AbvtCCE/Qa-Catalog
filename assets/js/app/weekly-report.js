@@ -118,6 +118,20 @@ function weeklyReportData(p, weekStart) {
     };
   });
 
+  // Livraisons reçues en test cette semaine dans les plans du projet (entry criteria, S3-6)
+  const planSet = new Set(p.planIds || []);
+  const deliveriesWeek = [];
+  state.testPlans.filter(pl => planSet.has(pl.id)).forEach(pl => (pl.deliveries || []).forEach(dl => {
+    if (!dl.receivedAt || dl.receivedAt < weekStart || dl.receivedAt > weekEnd) return;
+    deliveriesWeek.push({
+      plan: planDisplayTitle(pl), version: dl.version || '(sans version)', decision: dl.decision,
+      compliant: deliveryCompliant(dl), missing: deliveryMissingCriteria(dl).map(c => c.label),
+      lostDays: Number(dl.lostDays) || 0,
+    });
+  }));
+  const lostDaysAuto = deliveriesWeek.reduce((a, x) => a + x.lostDays, 0);
+  const nonCompliant = deliveriesWeek.filter(x => !x.compliant);
+
   // État général proposé : à valider ou corriger par la QA
   const execPct = planned.length ? Math.round((executed / planned.length) * 100) : 0;
   const timePct = wrTimePct(p, wrIso(ref));
@@ -138,6 +152,10 @@ function weeklyReportData(p, weekStart) {
     if (status === 'on_track') status = 'at_risk';
     why.push(`${blocked} test case${blocked > 1 ? 's' : ''} bloqué${blocked > 1 ? 's' : ''}`);
   }
+  if (nonCompliant.length > 0) {
+    if (status === 'on_track') status = 'at_risk';
+    why.push(`${nonCompliant.length} livraison${nonCompliant.length > 1 ? 's' : ''} hors entry criteria`);
+  }
   if (why.length === 0) why.push(`${execPct} % des test cases exécutés${timePct !== null ? ` pour ${timePct} % du temps écoulé` : ''}, aucun Blocker ouvert`);
 
   return {
@@ -146,12 +164,22 @@ function weeklyReportData(p, weekStart) {
     blockedGroups: Object.keys(blockedByReason).map(k => ({
       label: BLOCKED_REASON_LABELS[k] || 'Motif non précisé', cases: blockedByReason[k],
     })),
-    defects, execPct, timePct,
+    defects, execPct, timePct, deliveriesWeek, nonCompliant, lostDaysAuto,
     proposal: { status, reason: why.join(' ; ') },
   };
 }
 
 function wrStatusLabel(id) { return (WR_STATUSES.find(s => s.id === id) || WR_STATUSES[0]).label; }
+
+/* Jours de test perdus : la valeur saisie prime, sinon la somme des livraisons de la semaine. */
+function wrLostDays(d, notes) {
+  if (notes.lostDays !== '' && notes.lostDays != null) return String(notes.lostDays);
+  return d.lostDaysAuto ? `${d.lostDaysAuto} (livraisons)` : '–';
+}
+function wrDeliveryLine(x) {
+  return `Livraison ${x.version} (${x.plan}) : ${crLabel(CR_DELIVERY_DECISIONS, x.decision).toLowerCase()}`
+    + (x.missing.length ? ` ; entry criteria manquants : ${x.missing.join(' ')}` : '');
+}
 
 /* Le rapport en HTML sémantique (titres, tableaux, listes) : il se colle tel quel dans Confluence. */
 function weeklyReportHtml(d, notes) {
@@ -170,9 +198,10 @@ function weeklyReportHtml(d, notes) {
     <h2>Defects</h2>
     ${table(['Severity', 'Nouveaux', 'Corrigés', 'Ouverts', 'Plus ancien (jours)'], d.defects.map(r => [r.label, r.created, r.fixed, r.open, r.oldestDays === null ? '–' : r.oldestDays]))}
     <h2>Blocages</h2>
-    ${d.blockedGroups.length ? `<ul>${d.blockedGroups.map(g => `<li>${escapeHtml(g.label)} : ${g.cases.map(escapeHtml).join(', ')}</li>`).join('')}</ul>` : ''}
-    ${notes.blockers ? `<p>${txt(notes.blockers)}</p>` : (d.blockedGroups.length ? '' : '<p>Aucun blocage signalé.</p>')}
-    <p>Jours de test perdus : ${notes.lostDays !== '' && notes.lostDays != null ? escapeHtml(notes.lostDays) : '–'}.</p>
+    ${d.deliveriesWeek.length ? `<p>Livraisons reçues en test : ${d.deliveriesWeek.length}, dont ${d.deliveriesWeek.length - d.nonCompliant.length} conforme${d.deliveriesWeek.length - d.nonCompliant.length > 1 ? 's' : ''} aux entry criteria.</p>` : ''}
+    ${d.nonCompliant.length || d.blockedGroups.length ? `<ul>${d.nonCompliant.map(x => `<li>${escapeHtml(wrDeliveryLine(x))}</li>`).join('')}${d.blockedGroups.map(g => `<li>${escapeHtml(g.label)} : ${g.cases.map(escapeHtml).join(', ')}</li>`).join('')}</ul>` : ''}
+    ${notes.blockers ? `<p>${txt(notes.blockers)}</p>` : (d.blockedGroups.length || d.nonCompliant.length ? '' : '<p>Aucun blocage signalé.</p>')}
+    <p>Jours de test perdus : ${escapeHtml(wrLostDays(d, notes))}.</p>
     <h2>Risques et décisions attendues</h2>
     <p>${notes.risks ? txt(notes.risks) : 'Aucune décision attendue.'}</p>
     <h2>Semaine prochaine</h2>
@@ -195,9 +224,11 @@ function weeklyReportMarkdown(d, notes) {
     '## Defects', '',
     table(['Severity', 'Nouveaux', 'Corrigés', 'Ouverts', 'Plus ancien (jours)'], d.defects.map(r => [r.label, r.created, r.fixed, r.open, r.oldestDays === null ? '–' : r.oldestDays])), '',
     '## Blocages', '',
+    ...(d.deliveriesWeek.length ? [`Livraisons reçues en test : ${d.deliveriesWeek.length}, dont ${d.deliveriesWeek.length - d.nonCompliant.length} conforme(s) aux entry criteria.`, ''] : []),
+    ...d.nonCompliant.map(x => `- ${wrDeliveryLine(x)}`),
     ...d.blockedGroups.map(g => `- ${g.label} : ${g.cases.join(', ')}`),
-    ...(notes.blockers ? ['', notes.blockers] : (d.blockedGroups.length ? [] : ['Aucun blocage signalé.'])), '',
-    `Jours de test perdus : ${notes.lostDays !== '' && notes.lostDays != null ? notes.lostDays : '–'}.`, '',
+    ...(notes.blockers ? ['', notes.blockers] : (d.blockedGroups.length || d.nonCompliant.length ? [] : ['Aucun blocage signalé.'])), '',
+    `Jours de test perdus : ${wrLostDays(d, notes)}.`, '',
     '## Risques et décisions attendues', '',
     notes.risks || 'Aucune décision attendue.', '',
     '## Semaine prochaine', '',
@@ -276,7 +307,8 @@ function openWeeklyReportModal(projectId, weekStart) {
         <label style="${label}" for="wr-blockers">Blocages (en plus des test cases bloqués)</label>
         <textarea id="wr-blockers" rows="2" style="${field}" placeholder="Livraison hors entry criteria, test environment, test data…">${escapeHtml(initial.blockers)}</textarea>
         <label style="${label}" for="wr-lost">Jours de test perdus</label>
-        <input type="number" id="wr-lost" min="0" step="0.5" value="${escapeHtml(initial.lostDays)}" style="${field}max-width:120px;">
+        <input type="number" id="wr-lost" min="0" step="0.5" value="${escapeHtml(initial.lostDays)}" style="${field}max-width:120px;" placeholder="${d.lostDaysAuto || ''}" title="Vide : somme des jours perdus des livraisons de la semaine">
+        ${d.deliveriesWeek.length ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:4px;">${d.deliveriesWeek.length} livraison${d.deliveriesWeek.length > 1 ? 's' : ''} cette semaine, ${d.nonCompliant.length} hors entry criteria, ${d.lostDaysAuto} jour${d.lostDaysAuto > 1 ? 's' : ''} perdu${d.lostDaysAuto > 1 ? 's' : ''}.</div>` : ''}
 
         <label style="${label}" for="wr-risks">Risques et décisions attendues</label>
         <textarea id="wr-risks" rows="3" style="${field}" placeholder="Quoi, qui décide, pour quand.">${escapeHtml(initial.risks)}</textarea>

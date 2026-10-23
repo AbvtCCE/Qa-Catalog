@@ -2528,6 +2528,7 @@ function renderTestPlans(view) {
                     `}
                   </div>
                   <div style="display:flex;gap:2px;flex-shrink:0;">
+                    <button class="btn-icon btn-ghost" data-plan-change="${plan.id}" title="Changement, livraisons (entry criteria), exit criteria et test completion report">${ICON.ticket}</button>
                     <button class="btn-icon btn-ghost" data-checklist-plan="${plan.id}" title="Générer une checklist testeur">${ICON.checklist}</button>
                     <button class="btn-icon btn-ghost" data-csv-plan="${plan.id}" title="Exporter en CSV (Jira / Excel)">${ICON.export}</button>
                     <button class="btn-icon btn-ghost" data-print-plan="${plan.id}" title="Spec imprimable">${ICON.print}</button>
@@ -2535,6 +2536,12 @@ function renderTestPlans(view) {
                     <button class="btn-icon btn-ghost" data-delete-plan="${plan.id}" title="Supprimer">${ICON.trash}</button>
                   </div>
                 </div>
+                ${plan.changeNumber || plan.riskLevel || (plan.kind && plan.kind !== 'change') ? `
+                  <div style="display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;">
+                    ${plan.changeNumber ? `<span class="badge badge-primary">${escapeHtml(plan.changeNumber)}</span>` : ''}
+                    ${plan.riskLevel ? `<span class="badge ${plan.riskLevel === 'high' ? 'badge-danger' : plan.riskLevel === 'medium' ? 'badge-warning' : ''}">Risque ${escapeHtml(crLabel(CR_RISK_LEVELS, plan.riskLevel).toLowerCase())}</span>` : ''}
+                    ${plan.kind && plan.kind !== 'change' ? `<span class="badge badge-accent">${escapeHtml(crLabel(CR_PLAN_KINDS, plan.kind))}</span>` : ''}
+                  </div>` : ''}
                 <div style="display:flex;gap:6px;margin-top:10px;flex-wrap:wrap;">
                   <span class="badge">${meta.suiteCount} suites</span>
                   <span class="badge">${meta.directCount} cas directs</span>
@@ -2593,6 +2600,7 @@ function renderTestPlans(view) {
   document.getElementById('add-plan').onclick = () => openTestPlanModal();
   if (plans.length > 0) document.getElementById('export-plan').onclick = () => exportSpecChooser();
   if (plans.length > 0) document.getElementById('export-plan-csv').onclick = () => exportPlanCsvChooser();
+  view.querySelectorAll('[data-plan-change]').forEach(b => b.onclick = () => openPlanCriteriaModal(b.dataset.planChange));
   view.querySelectorAll('[data-checklist-plan]').forEach(b => b.onclick = () => openChecklistModal('plan', b.dataset.checklistPlan));
   view.querySelectorAll('[data-edit-plan]').forEach(b => b.onclick = () => openTestPlanModal(b.dataset.editPlan));
   view.querySelectorAll('[data-print-plan]').forEach(b => b.onclick = () => exportSpec(b.dataset.printPlan));
@@ -3051,6 +3059,24 @@ function openTestPlanModal(id) {
     </div>
 
     <div class="form-group">
+      <label class="field-label">Changement <span class="hint">entry et exit criteria, test completion report : bouton « Changement et criteria » du plan</span></label>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;">
+        <div style="flex:2;min-width:180px;">
+          <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:3px;">Numéro du changement ServiceNow</div>
+          <input type="text" id="plan-change" value="${escapeHtml(plan.changeNumber || '')}" placeholder="CHG0012345">
+        </div>
+        <div style="flex:1;min-width:130px;">
+          <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:3px;">Risk level</div>
+          <select id="plan-risk"><option value="">—</option>${CR_RISK_LEVELS.map(r => `<option value="${r.id}"${plan.riskLevel === r.id ? ' selected' : ''}>${r.label}</option>`).join('')}</select>
+        </div>
+        <div style="flex:1;min-width:170px;">
+          <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:3px;">Nature du plan (Test strategy)</div>
+          <select id="plan-kind">${CR_PLAN_KINDS.map(k => `<option value="${k.id}"${(plan.kind || 'change') === k.id ? ' selected' : ''}>${k.label}</option>`).join('')}</select>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
       <label class="field-label">Métadonnées dérivées <span class="hint">recalculées en direct</span></label>
       <div id="plan-preview" style="display:flex;gap:6px;flex-wrap:wrap;padding:10px 12px;background:var(--surface-soft);border:1px solid var(--border);border-radius:var(--radius-sm);min-height:36px;align-items:center;"></div>
     </div>
@@ -3148,6 +3174,9 @@ function openTestPlanModal(id) {
       if (!title) { toast('Le titre est requis'); return; }
       plan.title = title;
       plan.divisionIds = Array.from(body.querySelectorAll('#plan-divisions input:checked')).map(i => i.value);
+      plan.changeNumber = body.querySelector('#plan-change').value.trim();
+      plan.riskLevel = body.querySelector('#plan-risk').value;
+      plan.kind = body.querySelector('#plan-kind').value;
       plan.items = items;
       // Strip legacy fields
       delete plan.suiteIds;
@@ -3296,9 +3325,7 @@ function renderProjects(view) {
 
   document.getElementById('add-project').onclick = () => openProjectModal();
   view.querySelectorAll('[data-edit-project]').forEach(b => b.onclick = () => openProjectModal(b.dataset.editProject));
-  view.querySelectorAll('[data-weekly-project]').forEach(b => b.onclick = () => openWeeklyReportModal(b.dataset.weeklyProject));
-  view.querySelectorAll('[data-completion-project]').forEach(b => b.onclick = () => openCompletionReportsModal(b.dataset.completionProject));
-  view.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => {
+  view.querySelectorAll('[data-weekly-project]').forEach(b => b.onclick = () => openWeeklyReportModal(b.dataset.weeklyProject));  view.querySelectorAll('[data-delete-project]').forEach(b => b.onclick = () => {
     const pid = b.dataset.deleteProject;
     confirmDialog('Supprimer ce projet ? Les plans rattachés ne sont pas touchés (ils restent dans le catalogue).', () => {
       state.projects = state.projects.filter(p => p.id !== pid);
@@ -3327,7 +3354,6 @@ function renderProjectCard(p, s) {
         </div>
         <div style="display:flex;gap:2px;flex-shrink:0;">
           <button class="btn-icon btn-ghost" data-weekly-project="${p.id}" title="Weekly test progress report">${ICON.calendar}</button>
-          <button class="btn-icon btn-ghost" data-completion-project="${p.id}" title="Test completion reports (test evidence pour le CAB)">${ICON.ticket}</button>
           <button class="btn-icon btn-ghost" data-edit-project="${p.id}" title="Modifier">${ICON.edit}</button>
           <button class="btn-icon btn-ghost" data-delete-project="${p.id}" title="Supprimer">${ICON.trash}</button>
         </div>
