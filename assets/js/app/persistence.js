@@ -458,6 +458,10 @@ async function load() {
     // Test environments et test data (S6)
     if (!Array.isArray(state.testDataRequests)) state.testDataRequests = [];
     if (!Array.isArray(state.testDataSets)) state.testDataSets = [];
+    // Mesurer et chiffrer (S8)
+    if (!state.measure || typeof state.measure !== 'object') state.measure = { method: {}, baseline: {}, months: [] };
+    // DDP : un defect est trouvé en test, sauf s'il est marqué trouvé en production
+    state.anomalies.forEach(a => { if (a.foundIn !== 'production') a.foundIn = 'test'; });
     (state.environments || []).forEach(e => { if (!Array.isArray(e.outages)) e.outages = []; });
     // Migrate: ensure toAutomate (decision flag) exists. If absent, mirror `automated`.
     state.testCases.forEach(c => {

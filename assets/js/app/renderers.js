@@ -112,6 +112,8 @@ function renderDashboard(view) {
       </div>
     ` : ''}
 
+    ${renderMeasureSummary()}
+
     <div class="dashboard-grid">
       <div class="stat-card">
         <div class="label">Préparation</div>
@@ -195,6 +197,7 @@ function renderDashboard(view) {
   `;
 
   document.getElementById('add-project-from-dash').onclick = () => openProjectModal();
+  view.querySelectorAll('[data-goto-measure]').forEach(b => { b.onclick = () => switchTab('measure'); });
   view.querySelectorAll('[data-goto-anomalies], [data-anomaly-card]').forEach(b => {
     b.onclick = () => switchTab('anomalies');
   });
@@ -5240,6 +5243,7 @@ function renderAnomalyCard(a) {
         <span class="badge ${anomalySeverityBadgeClass(a.severity)}" title="Severity : l'impact">${escapeHtml(anomalySeverityLabel(a.severity))}</span>
         ${a.priority ? `<span class="badge badge-primary" title="Priority : l'urgence de la correction">${escapeHtml(anomalyPriorityLabel(a.priority))}</span>` : (anomalyIsOpen(a) ? '<span class="badge badge-muted" title="La priority se fixe au defect triage">Priority à fixer</span>' : '')}
         <span class="badge">${escapeHtml(anomalyTypeLabel(a.type))}</span>
+        ${a.foundIn === 'production' ? '<span class="badge badge-danger" title="Defect échappé en production : compte dans le DDP">En production</span>' : ''}
         ${age !== null ? `<span class="badge" title="${anomalyIsOpen(a) ? 'Âge depuis la détection' : 'Durée de la détection à la clôture'}">${age} j</span>` : ''}
         ${reopened ? `<span class="badge badge-warning">Rouvert ×${reopened}</span>` : ''}
         ${a.legacyClosure ? '<span class="badge badge-muted" title="Clôturé avant le processus : confirmation testing et root cause non tracés">Clôture ancienne</span>' : ''}
@@ -5358,8 +5362,9 @@ function openAnomalyModal(id) {
         <input type="text" id="an-assignee" value="${v('assignee')}" placeholder="Qui corrige">
       </div>
       <div class="form-group">
-        <label class="field-label">Détecté le</label>
+        <label class="field-label">Détecté le <span class="hint">et où (DDP)</span></label>
         <input type="date" id="an-detected" value="${v('detectedAt')}">
+        <select id="an-found" style="margin-top:6px;"><option value="test" ${anomaly.foundIn !== 'production' ? 'selected' : ''}>Trouvé en test</option><option value="production" ${anomaly.foundIn === 'production' ? 'selected' : ''}>Trouvé en production</option></select>
       </div>
       <div class="form-group">
         <label class="field-label">Type ISTQB</label>
@@ -5705,6 +5710,7 @@ function openAnomalyModal(id) {
       anomaly.type = body.querySelector('#an-type').value;
       anomaly.assignee = val('#an-assignee');
       anomaly.detectedAt = body.querySelector('#an-detected').value || anomaly.detectedAt || today();
+      anomaly.foundIn = body.querySelector('#an-found').value;
       anomaly.environmentId = body.querySelector('#an-env').value;
       anomaly.testedVersion = val('#an-version');
       anomaly.changeRef = val('#an-change');

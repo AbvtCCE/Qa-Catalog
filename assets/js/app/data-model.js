@@ -203,6 +203,7 @@ let state = {
   productRisks: [],      // product risk analysis (voir risks.js)
   testDataRequests: [],  // circuit des test data requests (voir test-env-data.js)
   testDataSets: [],      // catalogue des test data sets par processus
+  measure: { method: {}, baseline: {}, months: [] }, // Mesurer et chiffrer (voir measure.js)
   settings: { jiraBaseUrl: '' },
 };
 

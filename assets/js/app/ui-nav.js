@@ -15,6 +15,7 @@ const TABS = [
   { id: 'data',         label: 'Tables de données', resource: 'dataTables', group: 'Données', icon: ICON.table, render: renderDataTables   },
   { id: 'environments', label: 'Environnements',  resource: 'environments', group: 'Données', icon: ICON.env,    render: renderEnvironments },
   { id: 'testers',      label: 'Testeurs',        resource: 'testers',      group: 'Équipe', icon: ICON.users,    render: renderTesters      },
+  { id: 'measure',      label: 'Mesurer',         resource: 'measure',      group: 'Rapports',icon: ICON.table,     render: renderMeasure      },
   { id: 'reportbuilder',label: 'Rapport libre',   resource: 'reportBuilder',group: 'Rapports',icon: ICON.checklist, render: renderReportBuilder },
   { id: 'export',       label: 'Export / Import', resource: 'export',       group: 'Système',icon: ICON.export,    render: renderExport       },
 ];
