@@ -35,6 +35,7 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/renderers.js` | Tous les écrans |
 | `assets/js/app/reports-export.js` | Exports, checklist testeur, spec imprimable |
 | `assets/js/app/free-report.js` | Générateur de rapports |
+| `assets/js/app/automation.js` | Onglet Automatisation : objectifs, répartition, inventaire (exécutions, durée à la main, maintenance, signal d’alarme, décision), candidats et grille, règles de maintenance |
 | `assets/js/app/test-env-data.js` | Journal d’indisponibilité des test environments, fiche copiable, circuit des test data requests, catalogue des test data sets |
 | `assets/js/app/risks.js` | Onglet Risques : product risk analysis (likelihood × impact), priorité des test cases dérivée du risque, sélection des regression tests par le risque |
 | `assets/js/app/weekly-report.js` | Weekly test progress report d'un projet (calcul, aperçu, copie pour Confluence, .md) |
@@ -99,7 +100,7 @@ Sans configuration, les références restent du texte et les libellés sont neut
 
 | Collection de `state` | Champs principaux |
 |---|---|
-| `testCases` | id, title, steps[{type, action, expected, requiresScreenshot, blockId}], environmentIds, divisionIds, types, crud, minLevelId, estimatedTime, ready, automated, toAutomate, isInterface, jiraTickets[{key, summary}], linkedCaseIds, screenshots, sortOrder |
+| `testCases` | id, title, steps[{type, action, expected, requiresScreenshot, blockId}], environmentIds, divisionIds, types, crud, minLevelId, estimatedTime, ready, automationStatus (manual, candidate, automated, flaky, retired ; automated et toAutomate en sont dérivés), automationRef, automationGrid, automationDecision, automationReviewedAt, automationExecsPerMonth, manualReason, maintenanceLog[{id, date, minutes, note, by}], isInterface, jiraTickets[{key, summary}], linkedCaseIds, screenshots, sortOrder |
 | `testSuites` | id, title, testCaseIds, divisionIds |
 | `testPlans` | id, title, items[{type: suite ou case, id}], testCaseIds, divisionIds, changeNumber (ServiceNow), riskLevel (low, medium, high), kind (change, smoke, targeted, full), deliveries[{id, version, receivedAt, checks{6 entry criteria}, decision (accepted, accepted_with_reserve, refused), lostDays, note}], exitAdaptations{criterion : {text, reason}}, completionReports[{id, reportDate, deliveryId, regressionRunId, priorityConfirmed, manualStatus, untestedReason, decisions{anomalyId : texte}, risks, recommendation, recommendationText, uatName, uatDate, evidenceLinks, frozenAt, frozenBy, snapshot{html, markdown, changeNumber, riskLevel, recommendation, criteria}}] |
 | `projects` | id, name, startDate, endDate, planIds, weeklyNotes{lundi AAAA-MM-JJ : {status, reason, blockers, lostDays, risks, next}} |
@@ -113,7 +114,7 @@ Sans configuration, les références restent du texte et les libellés sont neut
 | `businessDivisions` | id, name, parentId (un niveau de sous-division) |
 | `testRuns` | exécutions importées des checklists : id (= sessionId de la checklist), sourceType (plan ou suite), sourceId, projectId, tester, assignedDate, exportedAt, importedAt, importedBy, results[{caseId, outcome (passed, failed, blocked, not_run), blockedReason, remarks, stepRemarks, stepsDone, stepsTotal, startedAt, finishedAt, durationMin, durationEdited}] |
 | `productRisks` | id, code (R-01…), divisionId, domain, title (ce qui pourrait mal tourner), likelihood (1 à 3), impact (1 à 3), testCaseIds, technique, notes ; risk level = likelihood × impact : élevé 6 ou 9 (P1), moyen 3 ou 4 (P2), faible 1 ou 2 (P3) |
-| `settings` | testData{usualDelayDays, sendTo} ; riskAnalysis{participants, date, review} ; tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
+| `settings` | automation{goal, scope, staysManual, toolsEnvs, stakeholders, rules} ; testData{usualDelayDays, sendTo} ; riskAnalysis{participants, date, review} ; tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
 
 Les listes de référence (types de test, types, sévérités et états d'anomalie, CRUD) sont dans `data-model.js`. Les migrations de données sont dans `load()` de `persistence.js` ; elles sont idempotentes.
 

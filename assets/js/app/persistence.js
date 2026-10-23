@@ -462,6 +462,10 @@ async function load() {
     // Migrate: ensure toAutomate (decision flag) exists. If absent, mirror `automated`.
     state.testCases.forEach(c => {
       if (typeof c.toAutomate !== 'boolean') c.toAutomate = !!c.automated;
+      // Statut d'automatisation (S7) : dérivé des anciens booléens la première fois, puis source de vérité
+      if (!c.automationStatus) c.automationStatus = c.automated ? 'automated' : (c.toAutomate ? 'candidate' : 'manual');
+      setAutomationStatus(c, c.automationStatus);
+      if (!Array.isArray(c.maintenanceLog)) c.maintenanceLog = [];
     });
     // Base de fusion = la version GitHub, normalisee comme l'etat local pour comparer a l'identique.
     if (baseFromRemote) {

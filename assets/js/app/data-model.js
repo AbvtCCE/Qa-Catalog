@@ -164,6 +164,23 @@ const CRUD_OPS = [
   { id: 'delete', label: 'Suppression',  short: 'D', desc: 'Le test supprime un élément.' },
 ];
 
+/* ===== Statut d'automatisation (plan qualité, S7) =====
+   Candidat, automatisé, flaky (le plan) ; manuel (« ce qui reste manuel l'est pour une raison
+   écrite ») et retiré (décision « garder, réparer ou retirer »). Les anciens booléens
+   automated / toAutomate restent dérivés du statut, pour les compteurs existants. */
+const AUTOMATION_STATUSES = [
+  { id: 'manual', label: 'Manuel', desc: "Reste manuel, pour une raison écrite : jugement visuel, exploration, cas rare…" },
+  { id: 'candidate', label: 'Candidat', desc: "À automatiser : passé dans la grille et retenu." },
+  { id: 'automated', label: 'Automatisé', desc: "Automatisé, dans la suite active." },
+  { id: 'flaky', label: 'Flaky', desc: "Instable : sorti de la suite active jusqu'à sa correction (quarantaine)." },
+  { id: 'retired', label: 'Retiré', desc: "Automatisation retirée : elle coûtait plus qu'elle ne rapportait, ou le test n'a plus de valeur." },
+];
+function setAutomationStatus(c, status) {
+  c.automationStatus = AUTOMATION_STATUSES.some(s => s.id === status) ? status : 'manual';
+  c.automated = c.automationStatus === 'automated' || c.automationStatus === 'flaky';
+  c.toAutomate = c.automationStatus === 'candidate' || c.automated;
+}
+
 /* ===== State ===== */
 const STORAGE_KEY_LEGACY = 'qa-catalog-v1'; // for one-time migration
 const DB_NAME = 'qa-catalog';

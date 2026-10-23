@@ -440,10 +440,7 @@ function renderTestCases(view) {
     if (tcFilters.type && !(c.types || []).includes(tcFilters.type)) return false;
     if (tcFilters.ready === 'yes' && !c.ready) return false;
     if (tcFilters.ready === 'no' && c.ready) return false;
-    if (tcFilters.automated === 'yes' && !c.automated) return false;
-    if (tcFilters.automated === 'no' && c.automated) return false;
-    if (tcFilters.automated === 'backlog' && !(c.toAutomate && !c.automated)) return false;
-    if (tcFilters.automated === 'manual_only' && c.toAutomate) return false;
+    if (tcFilters.automated && (c.automationStatus || 'manual') !== tcFilters.automated) return false;
     if (tcFilters.crud === '__none' && c.crud) return false;
     // Priorité dérivée du risque (S5)
     if (tcFilters.risk === '__none' && caseRiskClass(c.id)) return false;
@@ -509,10 +506,7 @@ function renderTestCases(view) {
       </select>
       <select id="f-auto">
         <option value="">Automatisation (tous)</option>
-        <option value="yes" ${tcFilters.automated === 'yes' ? 'selected' : ''}>Automatisés</option>
-        <option value="backlog" ${tcFilters.automated === 'backlog' ? 'selected' : ''}>À automatiser (backlog)</option>
-        <option value="manual_only" ${tcFilters.automated === 'manual_only' ? 'selected' : ''}>Manuels uniquement</option>
-        <option value="no" ${tcFilters.automated === 'no' ? 'selected' : ''}>Non automatisés</option>
+        ${AUTOMATION_STATUSES.map(st => `<option value="${st.id}" ${tcFilters.automated === st.id ? 'selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}
       </select>
       <select id="f-steps">
         <option value="">Étapes (toutes)</option>
@@ -1234,6 +1228,8 @@ function openCsvImportModal(view) {
           ready: defaults.ready,
           automated: false,
           toAutomate: defaults.toAutomate,
+          automationStatus: defaults.toAutomate ? 'candidate' : 'manual',
+          maintenanceLog: [],
           estimatedTime: defaults.estimatedTime || '',
           types: [...defaults.types],
           crud: defaults.crud,
@@ -1279,18 +1275,9 @@ function openBulkEditModal(view) {
     </fieldset>
 
     <fieldset class="bulk-field">
-      <label class="bulk-toggle"><input type="checkbox" id="bf-toAutomate"> <span>« À automatiser »</span></label>
-      <select id="bv-toAutomate" disabled>
-        <option value="true">Marquer à automatiser</option>
-        <option value="false">Retirer du backlog auto</option>
-      </select>
-    </fieldset>
-
-    <fieldset class="bulk-field">
-      <label class="bulk-toggle"><input type="checkbox" id="bf-automated"> <span>« Automatisé »</span></label>
-      <select id="bv-automated" disabled>
-        <option value="true">Marquer automatisé (force À automatiser à vrai aussi)</option>
-        <option value="false">Marquer non automatisé</option>
+      <label class="bulk-toggle"><input type="checkbox" id="bf-autoStatus"> <span>Statut d’automatisation</span></label>
+      <select id="bv-autoStatus" disabled>
+        ${AUTOMATION_STATUSES.map(st => `<option value="${st.id}">${escapeHtml(st.label)}</option>`).join('')}
       </select>
     </fieldset>
 
@@ -1389,8 +1376,7 @@ function openBulkEditModal(view) {
       });
     }
     wireToggle('bf-ready', '#bv-ready');
-    wireToggle('bf-toAutomate', '#bv-toAutomate');
-    wireToggle('bf-automated', '#bv-automated');
+    wireToggle('bf-autoStatus', '#bv-autoStatus');
     wireToggle('bf-crud', '#bv-crud');
     if (body.querySelector('#bf-minLevel')) wireToggle('bf-minLevel', '#bv-minLevel');
     wireToggle('bf-environments', null, 'bv-environments-block');
@@ -1415,19 +1401,9 @@ function openBulkEditModal(view) {
         const v = body.querySelector('#bv-ready').value === 'true';
         changes.push(c => { c.ready = v; });
       }
-      if (body.querySelector('#bf-toAutomate').checked) {
-        const v = body.querySelector('#bv-toAutomate').value === 'true';
-        changes.push(c => {
-          c.toAutomate = v;
-          if (!v && c.automated) c.automated = false; // consistency
-        });
-      }
-      if (body.querySelector('#bf-automated').checked) {
-        const v = body.querySelector('#bv-automated').value === 'true';
-        changes.push(c => {
-          c.automated = v;
-          if (v) c.toAutomate = true; // consistency
-        });
+      if (body.querySelector('#bf-autoStatus').checked) {
+        const v = body.querySelector('#bv-autoStatus').value;
+        changes.push(c => { setAutomationStatus(c, v); });
       }
       if (body.querySelector('#bf-crud').checked) {
         const v = body.querySelector('#bv-crud').value || null;
@@ -1541,10 +1517,9 @@ function testCaseRow(tc, opts) {
       <div class="testcase-meta">${casePriorityBadge(tc.id)}${jiraPills}${moreJira}${divisionBadges}${types}${moreTypes}</div>
       <div class="testcase-step-count ${stepClass}" title="${escapeHtml(stepTooltip)}">${ICON.list}<span>${stepCount} étape${stepCount > 1 ? 's' : ''}</span></div>
       <div class="testcase-meta">${tc.estimatedTime ? ICON.clock + ' ' + formatMin(tc.estimatedTime) : ''}</div>
-      <div class="testcase-meta">${tc.automated
-        ? '<span class="badge badge-accent">' + ICON.bot + ' Auto</span>'
-        : (tc.toAutomate ? '<span class="badge" style="background:#FCE9D5;color:#8a4a1f;border-color:#EFD3B8;" title="Décidé d&#39;automatiser, pas encore implémenté">' + ICON.bot + ' À auto</span>' : '')
-      }</div>
+      <div class="testcase-meta">${(tc.automationStatus && tc.automationStatus !== 'manual')
+        ? `<span class="badge ${AUTO_STATUS_BADGE[tc.automationStatus]}" title="${escapeHtml(autoStatusMeta(tc.automationStatus).desc)}">${ICON.bot} ${escapeHtml(autoStatusMeta(tc.automationStatus).label)}</span>`
+        : ''}</div>
       <div class="testcase-meta">${(tc.screenshots || []).length ? '<span class="badge">' + ICON.image + ' ' + tc.screenshots.length + '</span>' : ''}</div>
       <div style="display:flex;gap:2px;">
         <button class="btn-icon btn-ghost" data-tc-up="${tc.id}" ${opts.isFirst ? 'disabled' : ''} title="Monter">↑</button>
@@ -1566,6 +1541,9 @@ function openTestCaseModal(id) {
     screenshots: [],
     automated: false,
     toAutomate: false,
+    automationStatus: 'manual',
+    automationRef: '',
+    maintenanceLog: [],
     estimatedTime: '',
     ready: false,
     types: [],
@@ -1662,16 +1640,10 @@ function openTestCaseModal(id) {
           <span class="switch-track"></span>
           <span style="font-size:13px;">Prêt</span>
         </label>
-        <label class="switch" data-tip="Décision : ce cas doit être automatisé. Sert à suivre le backlog d'automatisation.">
-          <input type="checkbox" id="tc-toautomate" ${tc.toAutomate ? 'checked' : ''}>
-          <span class="switch-track"></span>
-          <span style="font-size:13px;">À automatiser</span>
+        <label style="display:flex;gap:8px;align-items:center;font-size:13px;">Automatisation
+          <select id="tc-auto-status">${AUTOMATION_STATUSES.map(st => `<option value="${st.id}" ${(tc.automationStatus || 'manual') === st.id ? 'selected' : ''}>${escapeHtml(st.label)}</option>`).join('')}</select>
         </label>
-        <label class="switch" data-tip="Le cas est effectivement automatisé. Activer cette option active aussi « À automatiser » par cohérence.">
-          <input type="checkbox" id="tc-automated" ${tc.automated ? 'checked' : ''}>
-          <span class="switch-track"></span>
-          <span style="font-size:13px;">Automatisé</span>
-        </label>
+        <input type="text" id="tc-auto-ref" value="${escapeHtml(tc.automationRef || '')}" placeholder="Référence dans ${escapeHtml(toolName('automation') || 'l’outil d’automatisation')}" style="flex:1;min-width:180px;">
       </div>
       <div id="tc-auto-hint" style="font-size:11.5px;color:var(--text-muted);margin-top:6px;min-height:14px;"></div>
     </div>
@@ -1887,28 +1859,11 @@ function openTestCaseModal(id) {
     body.querySelector('#tc-duplicate').addEventListener('change', updateDuplicateHint);
     updateDuplicateHint();
 
-    // Live coupling: automated implies toAutomate; unchecking toAutomate also unchecks automated
-    const toAutoEl = body.querySelector('#tc-toautomate');
-    const autoEl = body.querySelector('#tc-automated');
+    // Statut d'automatisation (S7) : sa signification s'affiche sous le choix
+    const autoStatusEl = body.querySelector('#tc-auto-status');
     const autoHint = body.querySelector('#tc-auto-hint');
-    function updateAutoHint() {
-      const ta = toAutoEl.checked, a = autoEl.checked;
-      if (a) autoHint.textContent = '';
-      else if (ta) autoHint.textContent = 'Backlog d\'automatisation : décidé mais pas encore implémenté.';
-      else autoHint.textContent = '';
-    }
-    autoEl.addEventListener('change', () => {
-      if (autoEl.checked && !toAutoEl.checked) {
-        toAutoEl.checked = true;
-      }
-      updateAutoHint();
-    });
-    toAutoEl.addEventListener('change', () => {
-      if (!toAutoEl.checked && autoEl.checked) {
-        autoEl.checked = false;
-      }
-      updateAutoHint();
-    });
+    const updateAutoHint = () => { autoHint.textContent = autoStatusMeta(autoStatusEl.value).desc; };
+    autoStatusEl.addEventListener('change', updateAutoHint);
     updateAutoHint();
 
     // Jira tickets (with reorder)
@@ -2045,10 +2000,8 @@ function openTestCaseModal(id) {
       if (!tc.title) { toast('Le titre est requis'); return; }
       tc.estimatedTime = body.querySelector('#tc-time').value ? Number(body.querySelector('#tc-time').value) : '';
       tc.ready = body.querySelector('#tc-ready').checked;
-      tc.automated = body.querySelector('#tc-automated').checked;
-      tc.toAutomate = body.querySelector('#tc-toautomate').checked;
-      // Enforce: automated implies toAutomate (consistency)
-      if (tc.automated) tc.toAutomate = true;
+      setAutomationStatus(tc, body.querySelector('#tc-auto-status').value);
+      tc.automationRef = body.querySelector('#tc-auto-ref').value.trim();
       tc.isInterface = body.querySelector('#tc-interface').checked;
       tc.environmentIds = Array.from(body.querySelectorAll('#tc-envs input:checked')).map(i => i.value);
       tc.types = Array.from(body.querySelectorAll('#tc-types input:checked')).map(i => i.value);
@@ -5509,7 +5462,8 @@ function openAnomalyModal(id) {
         </div>
       </div>
       <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0;"><input type="checkbox" id="an-confirmed" ${anomaly.confirmationTested ? 'checked' : ''}> Confirmation testing fait <span class="required">*</span></label>
-      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0 12px;"><input type="checkbox" id="an-regression" ${anomaly.targetedRegressionDone ? 'checked' : ''}> Targeted regression rejouée <span class="required">*</span></label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0;"><input type="checkbox" id="an-regression" ${anomaly.targetedRegressionDone ? 'checked' : ''}> Targeted regression rejouée <span class="required">*</span></label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0 12px;" title="Plan qualité, S7-7 : le confirmation test d'un defect Major corrigé rejoint la regression suite, quand il est automatisable"><input type="checkbox" id="an-to-regression" ${anomaly.severity === 'critical' || anomaly.severity === 'major' ? 'checked' : ''}> Le confirmation test rejoint la regression suite (type Régression ; candidat à l’automatisation s’il est manuel)</label>
     </div>
 
     <div class="form-group">
@@ -5811,6 +5765,15 @@ function openAnomalyModal(id) {
         if (toState === 'reopened') { anomaly.reopenReason = reopenReason; anomaly.confirmationTested = false; anomaly.targetedRegressionDone = false; }
         if (toState === 'ready_for_retest') anomaly.fixedAt = new Date().toISOString();
         if (toState === 'closed') delete anomaly.legacyClosure;
+        // S7-7 : le confirmation test d'un defect corrigé rejoint la regression suite
+        if (toState === 'closed' && body.querySelector('#an-to-regression').checked) {
+          anomaly.testCaseIds.forEach(cid => {
+            const c = state.testCases.find(x => x.id === cid);
+            if (!c) return;
+            if (!(c.types || []).includes('regression')) c.types = [...(c.types || []), 'regression'];
+            if ((c.automationStatus || 'manual') === 'manual') setAutomationStatus(c, 'candidate');
+          });
+        }
         const willBeOpen = (ANOMALY_STATES.find(s => s.id === toState) || {}).kind === 'open';
         anomaly.resolvedAt = willBeOpen ? null : new Date().toISOString();
         anomaly.state = toState;

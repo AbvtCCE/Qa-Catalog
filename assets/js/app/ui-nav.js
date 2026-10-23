@@ -9,6 +9,7 @@ const TABS = [
   { id: 'testsuites',   label: 'Suites',          resource: 'testsuites',   group: 'Tests',    icon: ICON.suite,     render: renderTestSuites   },
   { id: 'testplans',    label: 'Plans',           resource: 'testplans',    group: 'Tests',    icon: ICON.plan,      render: renderTestPlans    },
   { id: 'risks',        label: 'Risques',         resource: 'risks',        group: 'Tests',    icon: ICON.alert,     render: renderRisks        },
+  { id: 'automation',   label: 'Automatisation',  resource: 'automation',   group: 'Tests',    icon: ICON.bot,       render: renderAutomation   },
   { id: 'anomalies',    label: 'Anomalies',       resource: 'anomalies',    group: null,       icon: ICON.bug,       render: renderAnomalies    },
   { id: 'projects',     label: 'Projets',         resource: 'projects',     group: 'Données', icon: ICON.calendar,  render: renderProjects     },
   { id: 'data',         label: 'Tables de données', resource: 'dataTables', group: 'Données', icon: ICON.table, render: renderDataTables   },
