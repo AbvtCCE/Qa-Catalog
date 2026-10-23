@@ -204,6 +204,9 @@ function renderMaturity(view) {
   const countClass = cls => MATURITY_POINTS.filter(p => maturityPointClass(p.id, profile) === cls).length;
   const filter = view.dataset.matFilter || 'all';
   const search = view.dataset.matSearch || '';
+  const guided = guidedMode();
+  const plain = id => MATURITY_PLAIN[id] || ['', ''];
+  const choiceHelp = rows => `<ul class="help-choices">${rows.map(([q, r]) => `<li>${escapeHtml(q)} <strong>→ ${escapeHtml(r)}</strong></li>`).join('')}</ul>`;
 
   view.innerHTML = `
     <div class="page-header">
@@ -212,16 +215,22 @@ function renderMaturity(view) {
         <div class="subtitle">Les 112 points de la check-list ISTQB, adaptés à la criticité et à la taille de l’entreprise : un niveau indicatif d’après TMMi et un plan d’amélioration.</div>
       </div>
       <div class="actions">
+        ${guideToggle('mat-guided')}
         ${a ? `<button class="btn" id="mat-copy" title="Colle le rapport dans un wiki, un e-mail ou un document">Copier le rapport</button><button class="btn" id="mat-md">Télécharger (.md)</button>` : ''}
       </div>
     </div>
 
+    ${guideBox('Par où commencer ?', 'Ce questionnaire dit où en est la qualité des logiciels dans votre entreprise et ce qu’il faut faire pour progresser. Pas besoin d’être informaticien : chaque point est expliqué en mots simples, avec la question à poser pour vérifier.', MATURITY_GUIDE, guided)}
+
     <div class="card" style="margin-bottom:16px;">
       <h3 style="font-size:15px;margin:0 0 8px;">Profil de l’entreprise <span style="font-weight:400;color:var(--text-muted);font-size:12px;">· le test dépend du contexte (CTFL 1.3)</span></h3>
+      ${helpDetails('Comment choisir la criticité et la taille ?', `<p style="margin:0 0 4px;"><strong>Criticité</strong> : que se passe-t-il si le logiciel tombe en panne ? Prenez la première réponse « oui » en partant du haut.</p>${choiceHelp(MATURITY_PROFILE_HELP.criticality)}
+        <p style="margin:8px 0 4px;"><strong>Taille</strong> : combien de personnes testent, toutes équipes confondues (QA, métier, développeurs, fournisseurs) ?</p>${choiceHelp(MATURITY_PROFILE_HELP.size)}
+        <p style="margin:8px 0 0;">En cas de doute entre deux choix, prenez le plus exigeant. Vous pourrez changer le profil à tout moment : vos réponses sont gardées.</p>`, guided && !(profile.criticality && profile.size))}
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;font-size:12.5px;">
         <label>Entreprise<br><input id="mat-company" style="${field}width:180px;" value="${escapeHtml(profile.company || '')}" ${dis}></label>
-        <label>Criticité<br><select id="mat-crit" style="${field}" ${dis}><option value="">—</option>${MATURITY_CRITICALITY.map(c => `<option value="${c.id}" ${profile.criticality === c.id ? 'selected' : ''}>${escapeHtml(c.label)}</option>`).join('')}</select></label>
-        <label>Taille<br><select id="mat-size" style="${field}" ${dis}><option value="">—</option>${MATURITY_SIZE.map(s => `<option value="${s.id}" ${profile.size === s.id ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}</select></label>
+        <label>Criticité<br><select id="mat-crit" style="${field}max-width:320px;" ${dis}><option value="">—</option>${MATURITY_CRITICALITY.map(c => `<option value="${c.id}" ${profile.criticality === c.id ? 'selected' : ''}>${escapeHtml(c.label)} (${escapeHtml(c.examples)})</option>`).join('')}</select></label>
+        <label>Taille<br><select id="mat-size" style="${field}max-width:320px;" ${dis}><option value="">—</option>${MATURITY_SIZE.map(s => `<option value="${s.id}" ${profile.size === s.id ? 'selected' : ''}>${escapeHtml(s.label)} (${escapeHtml(s.examples)})</option>`).join('')}</select></label>
         <label style="flex:1;min-width:200px;">Norme applicable <span style="color:var(--text-muted);">(si réglementé)</span><br><input id="mat-standard" style="${field}width:100%;" value="${escapeHtml(profile.standard || '')}" placeholder="Ex. IEC 62304, EN 50128, ISO 26262" ${dis}></label>
         ${canEdit ? '<button class="btn btn-sm" id="mat-profile-save">Enregistrer le profil</button>' : ''}
       </div>
@@ -238,20 +247,28 @@ function renderMaturity(view) {
         ${canEdit ? `<button class="btn btn-primary btn-sm" id="mat-new">${m.assessments.length ? 'Nouvelle évaluation (repart de celle-ci)' : 'Commencer l’évaluation'}</button>` : ''}
         ${canEdit && a ? `<input id="mat-label" style="${field}width:200px;" value="${escapeHtml(a.label || '')}" placeholder="Libellé : arrivée, bilan à 3 mois…"><input type="date" id="mat-date" style="${field}width:auto;" value="${escapeHtml(a.date || '')}"><button class="btn btn-sm" id="mat-meta-save">Enregistrer</button><button class="btn-icon btn-ghost" id="mat-delete" title="Supprimer cette évaluation">${ICON.trash}</button>` : ''}
       </div>
+      ${guided ? '<p class="help-plain" style="margin:8px 0 0;">Une évaluation est une photo de la situation à une date. La première fois, cliquez « Commencer l’évaluation ». Dans trois ou six mois, « Nouvelle évaluation » reprend vos réponses : vous changez seulement ce qui a bougé, et le progrès s’affiche. Le libellé et la date servent à les reconnaître.</p>' : ''}
     </div>
 
     ${a ? `<div id="mat-results"></div>
     <div class="card" style="margin-bottom:16px;">
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:10px;">
         <h3 style="font-size:15px;margin:0 8px 0 0;">Questionnaire</h3>
-        ${[['all', 'Tous'], ['todo', 'À traiter'], ['unanswered', 'Non répondus'], ['essential', 'Indispensables'], ['first', 'D’abord']].map(([id, l]) => `<button class="btn btn-sm ${filter === id ? 'btn-primary' : ''}" data-mat-filter="${id}">${l}</button>`).join('')}
+        ${[['all', 'Tous', 'Tous les points'], ['todo', 'À traiter', 'Les points répondus Non ou En partie'], ['unanswered', 'Non répondus', 'Les points pas encore répondus'], ['essential', 'Indispensables', 'Les points vitaux pour votre contexte'], ['first', 'D’abord', 'Les points à mettre en place en premier']].map(([id, l, t]) => `<button class="btn btn-sm ${filter === id ? 'btn-primary' : ''}" data-mat-filter="${id}" title="${t}">${l}</button>`).join('')}
         <input id="mat-search" style="${field}flex:1;min-width:160px;" placeholder="Rechercher" value="${escapeHtml(search)}">
       </div>
+      ${helpDetails('Comment répondre ?', `${helpList(MATURITY_ANSWER_HELP)}
+        <p style="margin:6px 0;"><strong>Vous ne savez pas ?</strong> Laissez le point sans réponse, ou répondez Non et notez « à vérifier avec… » dans la case à droite. Un point sans réponse ne compte pas dans le score. Cliquer une deuxième fois sur une réponse l’efface.</p>
+        <p style="margin:6px 0 2px;"><strong>Les étiquettes</strong></p>${helpList(MATURITY_BADGE_HELP)}
+        ${guided ? '' : '<p style="margin:6px 0 0;">Activez « Mode guidé » en haut de la page pour voir chaque point expliqué en clair.</p>'}`, guided && !(a.answers && Object.keys(a.answers).length))}
       <div id="mat-questions"></div>
     </div>
     <div class="card" id="mat-plan"></div>` : `
     <div class="card" style="text-align:center;padding:28px;"><p style="margin:0;color:var(--text-soft);">Aucune évaluation. Renseignez le profil, puis commencez l’évaluation : pour chaque point, cherchez une preuve (un document, un outil, une réunion, un chiffre) et répondez Oui, En partie, Non ou Sans objet.</p></div>`}
+    ${glossaryCard(field)}
   `;
+  wireGlossary(view);
+  view.querySelector('#mat-guided').onchange = (e) => { setGuidedMode(e.target.checked); renderMaturity(view); };
 
   const renderResults = () => {
     const box = view.querySelector('#mat-results');
@@ -260,6 +277,9 @@ function renderMaturity(view) {
     const sw = maturityScore(a, null, true), sc = maturityScore(a, null, false);
     const lvl = maturityLevel(a), target = maturityTarget();
     const delta = first && first.id !== a.id ? (sc.pct ?? 0) - (maturityScore(first, null, false).pct ?? 0) : null;
+    // L'aide garde son état ouvert ou fermé pendant qu'on répond
+    const prevHelp = box.querySelector('#mat-results-help details');
+    const helpOpen = prevHelp ? prevHelp.open : guided;
     box.innerHTML = `
       <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px;">
         <div class="card" style="flex:1;min-width:240px;">
@@ -275,11 +295,15 @@ function renderMaturity(view) {
           <div style="font-size:12px;font-weight:600;color:var(--text-soft);margin-bottom:6px;">Process areas TMMi <span style="font-weight:400;">· en place à ${MATURITY_IN_PLACE * 100} %, en cours à ${MATURITY_IN_PROGRESS * 100} %</span></div>
           <table style="border-collapse:collapse;width:100%;font-size:12.5px;">${MATURITY_TMMI.map(ar => { const st = maturityAreaStatus(a, ar); return `<tr>
             <td style="padding:4px 6px;border-bottom:1px solid var(--border);color:var(--text-muted);">N${ar.level}</td>
-            <td style="padding:4px 6px;border-bottom:1px solid var(--border);">${escapeHtml(ar.area)}</td>
+            <td style="padding:4px 6px;border-bottom:1px solid var(--border);" title="${escapeHtml(MATURITY_RESULT_HELP.areas[ar.area] || '')}">${escapeHtml(ar.area)}${guided && MATURITY_RESULT_HELP.areas[ar.area] ? `<div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(MATURITY_RESULT_HELP.areas[ar.area])}</div>` : ''}</td>
             <td style="padding:4px 6px;border-bottom:1px solid var(--border);text-align:right;"><span class="badge ${st.badge}">${escapeHtml(st.label)}${st.pct !== null ? ' · ' + st.pct + ' %' : ''}</span></td></tr>`; }).join('')}</table>
           <p style="font-size:11.5px;color:var(--text-muted);margin:8px 0 0;">Niveau indicatif : il ne remplace pas une évaluation TMMi menée par un assessor accrédité. Rattachement des points et seuils : proposition, à ajuster.</p>
         </div>
-      </div>`;
+      </div>
+      <div class="card" id="mat-results-help" style="margin:-4px 0 16px;">${helpDetails('Comment lire ce résultat ?', `<p style="margin:0 0 6px;">${escapeHtml(MATURITY_RESULT_HELP.scores)}</p>
+        <p style="margin:0 0 4px;"><strong>Le niveau</strong> suit le modèle TMMi. Il est atteint quand tous ses domaines (les « process areas ») sont en place, c’est-à-dire à ${MATURITY_IN_PLACE * 100} % ou plus ; « en cours » à partir de ${MATURITY_IN_PROGRESS * 100} %. Le niveau visé dépend de la criticité choisie dans le profil.</p>
+        ${helpList(MATURITY_RESULT_HELP.levels)}
+        <p style="margin:6px 0 0;">Un niveau bas en arrivant est normal : c’est la photo de départ. Ce qui compte, c’est la progression d’une évaluation à l’autre, et le plan d’amélioration plus bas dit quoi faire.</p>`, helpOpen)}</div>`;
   };
 
   const renderPlan = () => {
@@ -290,14 +314,14 @@ function renderMaturity(view) {
     const unanswered = MATURITY_POINTS.filter(p => !(a.answers || {})[p.id]).length;
     box.innerHTML = `
       <h3 style="font-size:15px;margin:0 0 4px;">Plan d’amélioration <span style="font-weight:400;color:var(--text-muted);font-size:12px;">· ${total} point${total > 1 ? 's' : ''} à traiter${unanswered ? `, ${unanswered} non évalué${unanswered > 1 ? 's' : ''}` : ''}</span></h3>
-      <p style="font-size:12px;color:var(--text-soft);margin:0 0 10px;">Les Non et les En partie, dans l’ordre des étapes du plan qualité : dans chaque étape, les points indispensables pour ce contexte, puis les « D’abord ». Pour un QA seul à plein temps, une étape prend environ une semaine ; une équipe peut en mener plusieurs de front.</p>
+      <p style="font-size:12px;color:var(--text-soft);margin:0 0 10px;">Les Non et les En partie, dans l’ordre des étapes du plan qualité : dans chaque étape, les points indispensables pour ce contexte, puis les « D’abord ». Pour un QA seul à plein temps, une étape prend environ une semaine ; une équipe peut en mener plusieurs de front.${guided ? ' Commencez par l’étape 1, point par point. Le bouton à droite d’un point ouvre l’onglet du catalogue qui aide à le mettre en place ; quand c’est fait, repassez le point à Oui dans le questionnaire.' : ''}</p>
       ${plan.filter(ph => ph.items.length).map(ph => `
         <div style="margin-bottom:12px;">
           <div style="font-weight:600;font-size:13.5px;">${ph.n}. ${escapeHtml(ph.title)} <span style="font-weight:400;color:var(--text-muted);font-size:12px;">· ${ph.items.length} point${ph.items.length > 1 ? 's' : ''}</span></div>
-          <div style="font-size:12px;color:var(--text-soft);margin-bottom:4px;">${escapeHtml(ph.why)}</div>
+          <div style="font-size:12px;color:var(--text-soft);margin-bottom:4px;">${escapeHtml(guided && MATURITY_PHASE_PLAIN[ph.n] ? MATURITY_PHASE_PLAIN[ph.n] : ph.why)}</div>
           ${ph.items.map(x => `<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;border-bottom:1px solid var(--border);font-size:12.5px;">
             <span class="badge ${x.answer === 'no' ? 'badge-danger' : 'badge-warning'}" style="flex-shrink:0;">${x.answer === 'no' ? 'Non' : 'En partie'}</span>
-            <div style="flex:1;"><strong>${escapeHtml(x.point.id)}</strong> ${escapeHtml(x.point.t)}
+            <div style="flex:1;"><strong>${escapeHtml(x.point.id)}</strong> ${escapeHtml(guided && plain(x.point.id)[0] ? plain(x.point.id)[0] : x.point.t)}
               ${x.cls === 'essential' ? ' <span class="badge badge-danger" style="font-size:10px;">indispensable</span>' : ''}${x.point.first ? ' <span class="badge badge-primary" style="font-size:10px;">D’abord</span>' : ''}${x.cls === 'optional' ? ' <span class="badge badge-muted" style="font-size:10px;">optionnel</span>' : ''}
               ${x.note ? `<div style="color:var(--text-muted);">${escapeHtml(x.note)}</div>` : ''}</div>
             ${MATURITY_TOOL_LINKS[x.point.id] && MATURITY_TOOL_LINKS[x.point.id] !== 'maturity' ? `<button class="btn btn-sm" data-mat-goto="${MATURITY_TOOL_LINKS[x.point.id]}" title="Le catalogue aide à le mettre en place" style="flex-shrink:0;">${escapeHtml(maturityTabLabel(MATURITY_TOOL_LINKS[x.point.id]))} ›</button>` : ''}
@@ -316,7 +340,7 @@ function renderMaturity(view) {
       if (filter === 'unanswered' && ans) return false;
       if (filter === 'essential' && maturityPointClass(p.id, profile) !== 'essential') return false;
       if (filter === 'first' && !p.first) return false;
-      return !term || (p.id + ' ' + p.t + ' ' + p.d).toLowerCase().includes(term);
+      return !term || (p.id + ' ' + p.t + ' ' + p.d + ' ' + plain(p.id).join(' ')).toLowerCase().includes(term);
     };
     box.innerHTML = MATURITY_CHECKLIST.map(part => {
       const groups = part.groups.map(g => ({ g, items: g.items.map(i => maturityPoint(i.id)).filter(keep) })).filter(x => x.items.length);
@@ -326,14 +350,20 @@ function renderMaturity(view) {
           ${items.map(p => {
             const ans = (a.answers || {})[p.id] || {};
             const cls = maturityPointClass(p.id, profile);
+            const badges = `${cls === 'essential' ? ' <span class="badge badge-danger" style="font-size:10px;" title="Vital pour votre contexte : compte double">indispensable</span>' : ''}${p.first ? ' <span class="badge badge-primary" style="font-size:10px;" title="À mettre en place en premier">D’abord</span>' : ''}${cls === 'optional' ? ' <span class="badge badge-muted" style="font-size:10px;" title="Peut attendre dans votre contexte : compte moitié">optionnel</span>' : ''}`;
+            const [pl, check] = plain(p.id);
+            const technical = `<div style="font-size:12px;color:var(--text-soft);margin:2px 0;">${escapeHtml(p.d)}</div>
+              <div style="font-size:11px;color:var(--text-muted);">${p.r.map(escapeHtml).join(' · ')}</div>`;
             return `<div style="padding:8px 0;border-bottom:1px solid var(--border);" data-mat-row="${p.id}">
-              <div style="font-size:13px;"><strong>${escapeHtml(p.id)}</strong> ${escapeHtml(p.t)}
-                ${cls === 'essential' ? ' <span class="badge badge-danger" style="font-size:10px;">indispensable</span>' : ''}${p.first ? ' <span class="badge badge-primary" style="font-size:10px;">D’abord</span>' : ''}${cls === 'optional' ? ' <span class="badge badge-muted" style="font-size:10px;">optionnel</span>' : ''}</div>
-              <div style="font-size:12px;color:var(--text-soft);margin:2px 0;">${escapeHtml(p.d)}</div>
-              <div style="font-size:11px;color:var(--text-muted);">${p.r.map(escapeHtml).join(' · ')}</div>
+              ${guided && pl ? `<div style="font-size:13.5px;"><strong>${escapeHtml(p.id)}</strong> ${escapeHtml(pl)}${badges}</div>
+                <div class="mat-check"><strong>Pour vérifier :</strong> ${escapeHtml(check)}</div>
+                ${helpDetails('Formulation de la check-list et preuve attendue', `<div style="font-size:12.5px;">${escapeHtml(p.t)}</div>${technical}`)}`
+              : `<div style="font-size:13px;"><strong>${escapeHtml(p.id)}</strong> ${escapeHtml(p.t)}${badges}</div>
+                ${technical}
+                ${pl ? helpDetails('En clair', `<div>${escapeHtml(pl)}</div><div style="margin-top:3px;"><strong>Pour vérifier :</strong> ${escapeHtml(check)}</div>`) : ''}`}
               <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:6px;">
-                ${MATURITY_ANSWERS.map(x => `<button class="btn btn-sm ${ans.v === x.id ? 'btn-primary' : ''}" data-mat-answer="${p.id}:${x.id}" ${dis}>${x.label}</button>`).join('')}
-                <input data-mat-note="${p.id}" style="${field}flex:1;min-width:180px;" placeholder="Preuve ou décision" value="${escapeHtml(ans.note || '')}" ${dis}>
+                ${MATURITY_ANSWERS.map(x => `<button class="btn btn-sm ${ans.v === x.id ? 'btn-primary' : ''}" data-mat-answer="${p.id}:${x.id}" title="${escapeHtml((MATURITY_ANSWER_HELP.find(h => h[0] === x.label) || ['', ''])[1])}" ${dis}>${x.label}</button>`).join('')}
+                <input data-mat-note="${p.id}" style="${field}flex:1;min-width:180px;" placeholder="${guided ? 'La preuve vue, ou qui vous a répondu' : 'Preuve ou décision'}" value="${escapeHtml(ans.note || '')}" ${dis}>
               </div>
             </div>`;
           }).join('')}`).join('')}</div>`;

@@ -225,6 +225,7 @@ function renderMeasure(view, monthArg) {
   const autoBase = {};
   if (typeof maturityFirstScore === 'function' && maturityFirstScore() !== null) autoBase.K9 = { v: maturityFirstScore() };
   const baseOf = id => Object.assign({}, autoBase[id] || {}, m.baseline[id] || {});
+  const guided = guidedMode();
   const kpiInput = (k, x, prefix) => k.type === 'ratio'
     ? `<input data-${prefix}="${k.id}:a" style="${field}width:70px;" value="${escapeHtml(x && x.a != null ? x.a : '')}" ${dis}> sur <input data-${prefix}="${k.id}:b" style="${field}width:70px;" value="${escapeHtml(x && x.b != null ? x.b : '')}" ${dis}>`
     : `<input data-${prefix}="${k.id}:v" style="${field}width:90px;" value="${escapeHtml(x && x.v != null ? x.v : '')}" ${dis}> ${escapeHtml(k.unit || '')}`;
@@ -236,17 +237,21 @@ function renderMeasure(view, monthArg) {
         <div class="subtitle">Des économies mesurées en ${escapeHtml(cur)}, des coûts évités présentés à part, et l’évolution des indicateurs depuis la baseline.</div>
       </div>
       <div class="actions">
-        <label style="font-size:12.5px;">Mois <input type="month" id="ms-month" value="${month}" style="${field}"></label>
+        ${guideToggle('ms-guided')}
+        <label style="font-size:12.5px;" title="Le mois auquel correspondent les chiffres du calculateur et du rapport">Mois <input type="month" id="ms-month" value="${month}" style="${field}"></label>
       </div>
     </div>
 
+    ${guideBox('Par où commencer ?', 'Cet onglet montre ce que le test rapporte à l’entreprise, en heures et en francs, et si la qualité progresse. Aucune connaissance technique n’est nécessaire : chaque ligne a son aide.', MEASURE_GUIDE, guided)}
+
     <div class="card" style="margin-bottom:16px;">
-      <h3 style="font-size:15px;margin:0 0 6px;">Méthode <span style="font-weight:400;color:var(--text-muted);font-size:12px;">· décision D4, à valider avant de présenter le moindre chiffre</span></h3>
+      <h3 style="font-size:15px;margin:0 0 6px;">Méthode <span style="font-weight:400;color:var(--text-muted);font-size:12px;">· décision D4 : à faire valider par votre hiérarchie avant de présenter le moindre chiffre</span></h3>
       <ol style="font-size:12.5px;color:var(--text-soft);margin:0 0 10px;padding-left:18px;">
         <li>Faire valider la méthode avant de présenter un chiffre : taux horaire, période de référence, règles de comptage.</li>
         <li>En francs, ne compter que ce qui aurait été fait à la main de toute façon. Les exécutions en plus comptent en coverage.</li>
         <li>Présenter les coûts évités à part, comme une estimation, avec un coût d’incident mesuré plutôt qu’un multiplicateur tiré d’un livre.</li>
       </ol>
+      ${helpDetails('Que mettre dans chaque champ ?', helpList(MEASURE_METHOD_HELP), guided && !m.method.validatedBy)}
       <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;font-size:12.5px;">
         <label>Taux horaire validé<br><input id="mm-rate" style="${field}width:100px;" value="${escapeHtml(m.method.rate || '')}" ${dis}> <input id="mm-currency" style="${field}width:60px;" value="${escapeHtml(cur)}" title="Monnaie" ${dis}>/h</label>
         <label>Période de référence<br><input type="date" id="mm-from" style="${field}" value="${escapeHtml(m.method.referenceFrom || '')}" ${dis}> → <input type="date" id="mm-to" style="${field}" value="${escapeHtml(m.method.referenceTo || '')}" ${dis}></label>
@@ -261,20 +266,25 @@ function renderMeasure(view, monthArg) {
     <div style="display:flex;gap:16px;flex-wrap:wrap;align-items:flex-start;margin-bottom:16px;">
       <div class="card" style="flex:3;min-width:420px;">
         <h3 style="font-size:15px;margin:0 0 8px;">Économies du mois · ${escapeHtml(msMonthLabel(month))}</h3>
+        ${guided ? '<p class="help-plain" style="margin:0 0 6px;">Remplissez les huit lignes, de haut en bas. Une valeur marquée « catalogue » a été trouvée dans le catalogue : vérifiez-la, vous pouvez la corriger. Le résultat se calcule à droite pendant la saisie.</p>' : ''}
         <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
-          ${MEASURE_CALC_FIELDS.map(f => `<tr><td style="${td}">${escapeHtml(f.label)}${autoTag(auto.calc[f.id] != null && auto.calc[f.id] !== '' && !(rec && rec.calc && rec.calc[f.id] !== undefined && String(rec.calc[f.id]) !== String(auto.calc[f.id])))}</td>
+          ${MEASURE_CALC_FIELDS.map(f => `<tr><td style="${td}">${escapeHtml(f.label)}${autoTag(auto.calc[f.id] != null && auto.calc[f.id] !== '' && !(rec && rec.calc && rec.calc[f.id] !== undefined && String(rec.calc[f.id]) !== String(auto.calc[f.id])))}${fieldHelp(MEASURE_FIELD_HELP[f.id], guided)}</td>
             <td style="${td}white-space:nowrap;"><input data-ms-calc="${f.id}" style="${field}width:100px;" value="${escapeHtml(calc[f.id] != null ? calc[f.id] : '')}" ${dis}> ${escapeHtml(unitLabel(f.unit))}</td></tr>`).join('')}
         </table>
         ${auto.sources.fr ? `<div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">Durée de la full regression : exécution chronométrée du ${escapeHtml(runDateLabel(auto.sources.fr.run))} (${escapeHtml(runSourceLabel(auto.sources.fr.run))}).</div>` : '<div style="font-size:11.5px;color:var(--text-muted);margin-top:6px;">Durée de la full regression : aucune exécution chronométrée d’un test plan de nature « Full regression » ; à saisir.</div>'}
       </div>
-      <div class="card" style="flex:2;min-width:280px;" id="ms-results">
-        ${measureResultsHtml(res, cur)}
-        ${canEdit ? `<button class="btn btn-primary btn-sm" id="ms-save-month" style="margin-top:10px;">${rec ? 'Mettre à jour' : 'Ajouter au cumul'} : ${escapeHtml(msMonthLabel(month))}</button>` : ''}
+      <div style="flex:2;min-width:280px;">
+        <div class="card" id="ms-results">
+          ${measureResultsHtml(res, cur)}
+          ${canEdit ? `<button class="btn btn-primary btn-sm" id="ms-save-month" style="margin-top:10px;">${rec ? 'Mettre à jour' : 'Ajouter au cumul'} : ${escapeHtml(msMonthLabel(month))}</button>` : ''}
+        </div>
+        <div class="card" style="margin-top:12px;">${helpDetails('Comment lire ces résultats ?', helpList(MEASURE_RESULT_HELP), guided)}</div>
       </div>
     </div>
 
     <div class="card" style="margin-bottom:16px;overflow-x:auto;">
       <h3 style="font-size:15px;margin:0 0 8px;">Cumul</h3>
+      ${guided ? `<p class="help-plain" style="margin:0 0 8px;">${escapeHtml(MEASURE_SECTION_HELP.cumul)}</p>` : ''}
       ${months.length === 0 ? '<p style="font-size:12.5px;color:var(--text-muted);font-style:italic;margin:0;">Aucun mois enregistré.</p>' : `
         <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
           <thead><tr><th style="${th}">Mois</th><th style="${th}">Heures</th><th style="${th}">Économies mesurées</th><th style="${th}">Coûts évités (estimation)</th><th style="${th}"></th></tr></thead>
@@ -289,7 +299,7 @@ function renderMeasure(view, monthArg) {
 
     <div class="card" style="margin-bottom:16px;overflow-x:auto;">
       <h3 style="font-size:15px;margin:0 0 4px;">Avant et après</h3>
-      <p style="font-size:12px;color:var(--text-soft);margin:0 0 8px;">À gauche, la baseline (période de référence) ; à droite, ${escapeHtml(msMonthLabel(month))}. Pour un taux, saisir les deux nombres : le calcul suit. Les valeurs marquées « catalogue » sont proposées, modifiables.</p>
+      <p style="font-size:12px;color:var(--text-soft);margin:0 0 8px;">${guided ? escapeHtml(MEASURE_SECTION_HELP.baseline) + ' La colonne « Évolution » est verte quand ça va mieux, rouge quand ça va moins bien.' : `À gauche, la baseline (période de référence) ; à droite, ${escapeHtml(msMonthLabel(month))}. Pour un taux, saisir les deux nombres : le calcul suit.`} Les valeurs marquées « catalogue » sont proposées, modifiables.</p>
       <table style="border-collapse:collapse;width:100%;font-size:12.5px;">
         <thead><tr><th style="${th}">Indicateur</th><th style="${th}">Baseline</th><th style="${th}">${escapeHtml(msMonthLabel(month))}</th><th style="${th}">Évolution</th></tr></thead>
         <tbody>${MEASURE_KPIS.map(k => {
@@ -297,7 +307,7 @@ function renderMeasure(view, monthArg) {
           const ev = kpiEvolution(k, b, c);
           const hasAuto = !!auto.kpi[k.id] && kpiValue(k, auto.kpi[k.id]) !== null;
           return `<tr>
-            <td style="${td}" title="${escapeHtml(k.question)}"><strong>${escapeHtml(k.name)}</strong><div style="color:var(--text-muted);font-size:11.5px;">${escapeHtml(k.formula)} · ${escapeHtml(k.id === 'K1' && toolName('changes') ? toolName('changes') : k.source)}</div></td>
+            <td style="${td}min-width:240px;" title="${escapeHtml(k.question)}"><strong>${escapeHtml(k.name)}</strong>${guided ? `<div style="font-size:12px;font-style:italic;">${escapeHtml(k.question)}</div>` : ''}<div style="color:var(--text-muted);font-size:11.5px;">${escapeHtml(k.formula)} · ${escapeHtml(k.id === 'K1' && toolName('changes') ? toolName('changes') : k.source)}</div>${fieldHelp(MEASURE_KPI_HELP[k.id], guided, 'Comment le lire, où trouver les chiffres ?')}</td>
             <td style="${td}white-space:nowrap;">${kpiInput(k, baseOf(k.id), 'ms-base')}${autoBase[k.id] && !m.baseline[k.id] ? autoTag(true) : ''}<div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(kpiLabel(k, b))}</div></td>
             <td style="${td}white-space:nowrap;">${kpiInput(k, kpiCur[k.id], 'ms-kpi')}${autoTag(hasAuto)}<div style="font-size:11.5px;color:var(--text-muted);">${escapeHtml(kpiLabel(k, c))}</div></td>
             <td style="${td}white-space:nowrap;color:${ev.good === null ? 'var(--text-muted)' : ev.good ? 'var(--success)' : '#8a3a2c'};font-weight:600;">${escapeHtml(ev.text)}</td>
@@ -309,13 +319,18 @@ function renderMeasure(view, monthArg) {
 
     <div class="card">
       <h3 style="font-size:15px;margin:0 0 8px;">Rapport pour la direction · ${escapeHtml(msMonthLabel(month))}</h3>
+      ${guided ? '<p class="help-plain" style="margin:0 0 8px;">Les chiffres viennent tout seuls du calculateur et du tableau « Avant et après ». Il reste à écrire trois courts textes ; l’aperçu à droite montre le rapport tel qu’il sera envoyé.</p>' : ''}
       <div class="wr-layout">
         <div>
           <label style="font-size:12px;color:var(--text-soft);">Le mois en bref<textarea id="mr-brief" rows="3" style="${field}width:100%;" placeholder="Trois phrases." ${dis}>${escapeHtml(notes.brief || '')}</textarea></label>
+          ${fieldHelp(MEASURE_REPORT_HELP.brief, guided, 'Conseil et exemple')}
           <label style="font-size:12px;color:var(--text-soft);">Risques et besoins<textarea id="mr-risks" rows="3" style="${field}width:100%;" placeholder="Décisions attendues de la direction" ${dis}>${escapeHtml(notes.risks || '')}</textarea></label>
+          ${fieldHelp(MEASURE_REPORT_HELP.risks, guided, 'Exemples')}
           <label style="font-size:12px;color:var(--text-soft);">Le mois prochain<textarea id="mr-next" rows="2" style="${field}width:100%;" ${dis}>${escapeHtml(notes.next || '')}</textarea></label>
+          ${fieldHelp(MEASURE_REPORT_HELP.next, guided, 'Où trouver les actions ?')}
           <div style="font-size:12px;color:var(--text-soft);margin-top:6px;">Maturité TMMi, niveau 2</div>
-          ${TMMI_L2_AREAS.map(a => `<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:12.5px;margin:3px 0;"><span>${escapeHtml(a)}</span>
+          ${fieldHelp(MEASURE_REPORT_HELP.tmmi, guided, 'À savoir')}
+          ${TMMI_L2_AREAS.map(a => `<div style="display:flex;justify-content:space-between;gap:6px;align-items:center;font-size:12.5px;margin:3px 0;"><span title="${escapeHtml(MATURITY_RESULT_HELP.areas[a] || '')}">${escapeHtml(a)}${guided && MATURITY_RESULT_HELP.areas[a] ? `<div style="font-size:11px;color:var(--text-muted);">${escapeHtml(MATURITY_RESULT_HELP.areas[a])}</div>` : ''}</span>
             <select data-mr-tmmi="${escapeHtml(a)}" style="${field}" ${dis}>${TMMI_STATUSES.map(s => `<option value="${s.id}" ${((notes.tmmi || {})[a] || 'todo') === s.id ? 'selected' : ''}>${s.label}</option>`).join('')}</select></div>`).join('')}
         </div>
         <div class="wr-preview" id="mr-preview"></div>
@@ -327,7 +342,10 @@ function renderMeasure(view, monthArg) {
         ${canEdit ? '<button class="btn btn-primary" id="mr-save">Enregistrer avec le mois</button>' : ''}
       </div>
     </div>
+    ${glossaryCard(field)}
   `;
+  wireGlossary(view);
+  view.querySelector('#ms-guided').onchange = (e) => { setGuidedMode(e.target.checked); renderMeasure(view, month); };
 
   const readNotes = () => {
     const tmmi = {};
@@ -423,7 +441,7 @@ function measureResultsHtml(r, cur) {
     <div style="font-size:12px;color:var(--text-soft);margin-top:8px;">Économies mesurées</div><div style="font-size:22px;font-weight:600;color:var(--success);">${escapeHtml(msMoney(r.chf))}</div>
     <div style="font-size:12px;color:var(--text-soft);margin-top:8px;">Coûts évités, estimation présentée à part</div><div style="font-size:18px;font-weight:600;">${escapeHtml(msMoney(r.ev))}</div>
     <div style="font-size:12px;color:var(--text-soft);margin-top:8px;">Exécutions automatiques en plus <span title="Elles comptent en coverage, pas en ${escapeHtml(cur)}">(coverage)</span></div><div style="font-size:16px;font-weight:600;">${r.plus == null ? '–' : msFmt(r.plus)}</div>
-    ${r.h != null && r.h < 0 ? '<div style="font-size:12px;color:#8a3a2c;margin-top:8px;">Ce mois, l’automatisation coûte plus de temps qu’elle n’en économise : repasser les test cases dans la grille de la semaine 7 (onglet Automatisation).</div>' : ''}`;
+    ${r.h != null && r.h < 0 ? '<div style="font-size:12px;color:#8a3a2c;margin-top:8px;">Ce mois, l’automatisation coûte plus de temps qu’elle n’en économise : repasser les test cases dans la grille de décision de l’onglet Automatisation.</div>' : ''}`;
 }
 
 /* Résumé sur le tableau de bord : économies et indicateurs du dernier mois enregistré. */

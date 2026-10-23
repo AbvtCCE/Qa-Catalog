@@ -37,6 +37,7 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/free-report.js` | Générateur de rapports |
 | `assets/js/app/maturity-data.js` | Les 112 points de la check-list QA d’après l’ISTQB (généré à partir de la page de la check-list, ne pas modifier à la main) |
 | `assets/js/app/maturity.js` | Onglet Maturité : profil (criticité, taille), questionnaire, scores, niveau indicatif d’après TMMi, plan d’amélioration par étapes, réévaluations |
+| `assets/js/app/guide.js` | Aide pour débutants des onglets Mesurer et Maturité : mode guidé, guides pas à pas, aide de chaque champ et indicateur, les 112 points en clair avec une question pour vérifier, aide au choix du profil, lexique |
 | `assets/js/app/measure.js` | Onglet Mesurer : méthode (D4), calculateur des économies et des coûts évités, cumul mensuel, avant et après des 9 indicateurs, rapport mensuel pour la direction ; résumé sur le tableau de bord |
 | `assets/js/app/automation.js` | Onglet Automatisation : objectifs, répartition, inventaire (exécutions, durée à la main, maintenance, signal d’alarme, décision), candidats et grille, règles de maintenance |
 | `assets/js/app/test-env-data.js` | Journal d’indisponibilité des test environments, fiche copiable, circuit des test data requests, catalogue des test data sets |
@@ -78,6 +79,8 @@ L'outil n'impose aucun outil tiers. Dans l'onglet Environnements, la carte « Ou
 | Automatisation des tests | Tosca, Playwright, Cypress, Robot Framework |
 
 Sans configuration, les références restent du texte et les libellés sont neutres (« Tickets », « Référence du changement »).
+
+Les onglets Mesurer et Maturité doivent rester utilisables par quelqu’un sans expérience de l’informatique, du test ou de la gestion de projet. Le « Mode guidé » (coché par défaut, mémorisé dans chaque navigateur) affiche un guide pas à pas, l’explication de chaque champ et de chaque indicateur (ce que c’est, où trouver le chiffre, un exemple), et chaque point de la check-list en clair avec une question à poser pour le vérifier. Décoché, ces aides restent accessibles sur demande. Les textes sont dans `guide.js` : ils ne citent aucun outil précis ; un nouveau point de la check-list doit y recevoir son explication.
 
 ## Synchronisation
 
