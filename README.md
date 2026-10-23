@@ -36,7 +36,7 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/reports-export.js` | Exports, checklist testeur, spec imprimable |
 | `assets/js/app/free-report.js` | Générateur de rapports |
 | `assets/js/app/weekly-report.js` | Weekly test progress report d'un projet (calcul, aperçu, copie pour Confluence, .md) |
-| `assets/js/app/completion-report.js` | Dans chaque test plan : changement ServiceNow, livraisons et entry criteria, exit criteria (et leurs adaptations), test completion report figé pour le CAB |
+| `assets/js/app/completion-report.js` | Dans chaque test plan : référence du changement, livraisons et entry criteria, exit criteria (et leurs adaptations), test completion report figé pour le CAB |
 | `assets/js/app/ui-nav.js`, `main.js` | Navigation, fenêtres, démarrage |
 
 L'ordre des `<script>` dans `index.html` compte : les fichiers partagent des variables globales.
@@ -59,6 +59,19 @@ Limites, à connaître :
 - Les **rôles** (QA Manager, Fonctionnel, Testeur) ne font que masquer des boutons dans le navigateur. Toute personne qui a un jeton en écriture peut techniquement modifier n'importe quelle donnée.
 - Les **mots de passe** de l'application identifient l'utilisateur ; ils ne protègent pas les données. Leur empreinte (SHA-256 avec un sel fixe) est stockée dans `data.json`.
 - Le jeton est stocké en clair dans le localStorage du navigateur. Sur un poste partagé, l'effacer : Administration > Effacer (QA Manager), ou effacer les données du site dans le navigateur.
+
+## Adapter à son entreprise
+
+L'outil n'impose aucun outil tiers. Dans l'onglet Environnements, la carte « Outils reliés » configure, pour chaque usage, le nom de l'outil et un modèle de lien où `{ref}` est remplacé par la référence :
+
+| Usage | Exemples |
+|---|---|
+| Exigences et tickets (liés aux test cases) | Jira, Azure DevOps, Redmine, GitLab |
+| Changements (CAB), liés aux test plans et aux defects | ServiceNow, Jira Service Management, GLPI, iTop |
+| Defects, si ceux qui corrigent travaillent dans un autre outil | Jira, Azure DevOps, Mantis |
+| Automatisation des tests | Tosca, Playwright, Cypress, Robot Framework |
+
+Sans configuration, les références restent du texte et les libellés sont neutres (« Tickets », « Référence du changement »).
 
 ## Synchronisation
 
@@ -88,14 +101,14 @@ Limites, à connaître :
 | `testSuites` | id, title, testCaseIds, divisionIds |
 | `testPlans` | id, title, items[{type: suite ou case, id}], testCaseIds, divisionIds, changeNumber (ServiceNow), riskLevel (low, medium, high), kind (change, smoke, targeted, full), deliveries[{id, version, receivedAt, checks{6 entry criteria}, decision (accepted, accepted_with_reserve, refused), lostDays, note}], exitAdaptations{criterion : {text, reason}}, completionReports[{id, reportDate, deliveryId, regressionRunId, priorityConfirmed, manualStatus, untestedReason, decisions{anomalyId : texte}, risks, recommendation, recommendationText, uatName, uatDate, evidenceLinks, frozenAt, frozenBy, snapshot{html, markdown, changeNumber, riskLevel, recommendation, criteria}}] |
 | `projects` | id, name, startDate, endDate, planIds, weeklyNotes{lundi AAAA-MM-JJ : {status, reason, blockers, lostDays, risks, next}} |
-| `anomalies` | id, title, description, type, severity, state, testCaseIds, workaround, solution, peopleInvolved, screenshots, createdAt, resolvedAt |
+| `anomalies` | defect management (modèle du plan, S4) : id, title, state (new, triaged, in_fix, ready_for_retest, reopened, deferred, closed, rejected ; transitions dans `ANOMALY_TRANSITIONS`), severity (Blocker, Major, Minor, Cosmetic), priority (p1 à p4, fixée au triage), type, assignee, detectedAt ; defect report : environmentId, testedVersion, changeRef, externalRef, stepsToReproduce, expectedResult, testOracle, actualResult, evidence, testDataUsed ; fixVersion, deferredBy, deferredUntil, deferredReason, rejectReason, reopenReason, rootCause, rootCauseNote, confirmationTested, targetedRegressionDone ; history[{at, by, from, to, reason}], fixedAt, resolvedAt, legacyClosure ; testCaseIds, workaround, solution, peopleInvolved, jiraTickets, screenshots, description, createdAt |
 | `environments` | id, title, address |
 | `dataTables` | id, name, columns[{id, name}], rows ; utilisées dans les steps par `{{table.colonne}}` |
 | `stepBlocks` | id, name, steps (blocs de steps réutilisables) |
 | `testers`, `testerLevels` | testeurs (name, levelId, divisionIds, notes) et niveaux (name, order, divisionId) |
 | `businessDivisions` | id, name, parentId (un niveau de sous-division) |
 | `testRuns` | exécutions importées des checklists : id (= sessionId de la checklist), sourceType (plan ou suite), sourceId, projectId, tester, assignedDate, exportedAt, importedAt, importedBy, results[{caseId, outcome (passed, failed, blocked, not_run), blockedReason, remarks, stepRemarks, stepsDone, stepsTotal, startedAt, finishedAt, durationMin, durationEdited}] |
-| `settings` | jiraBaseUrl |
+| `settings` | tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
 
 Les listes de référence (types de test, types, sévérités et états d'anomalie, CRUD) sont dans `data-model.js`. Les migrations de données sont dans `load()` de `persistence.js` ; elles sont idempotentes.
 

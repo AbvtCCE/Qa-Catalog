@@ -105,7 +105,7 @@ function renderDashboard(view) {
       <div class="alert-banner ${anStats.criticalOpen > 0 ? '' : 'warn'}">
         ${ICON.alert}
         <div class="body">
-          ${anStats.criticalOpen > 0 ? `<strong>${anStats.criticalOpen} anomalie${anStats.criticalOpen > 1 ? 's' : ''} critique${anStats.criticalOpen > 1 ? 's' : ''} ouverte${anStats.criticalOpen > 1 ? 's' : ''}</strong>` : ''}
+          ${anStats.criticalOpen > 0 ? `<strong>${anStats.criticalOpen} Blocker ouvert${anStats.criticalOpen > 1 ? 's' : ''}</strong>` : ''}
           ${anStats.orphans > 0 ? `${anStats.criticalOpen > 0 ? '<br>' : '<strong>'}${anStats.orphans} anomalie${anStats.orphans > 1 ? 's' : ''} sans cas de test lié — la traçabilité doit être complétée${anStats.criticalOpen > 0 ? '' : '</strong>'}` : ''}
         </div>
         <button data-goto-anomalies>Voir l'onglet</button>
@@ -137,7 +137,7 @@ function renderDashboard(view) {
         <div class="label">Anomalies ouvertes</div>
         <div class="value" style="color:${anStats.open > 0 ? 'var(--accent)' : 'var(--text)'};">${anStats.open}<span style="font-size:14px;color:var(--text-muted);"> / ${anStats.total}</span></div>
         <div class="delta" style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;">
-          ${anStats.criticalOpen > 0 ? `<span class="badge badge-danger" style="font-size:10.5px;padding:1px 6px;">${anStats.criticalOpen} critique${anStats.criticalOpen > 1 ? 's' : ''}</span>` : ''}
+          ${anStats.criticalOpen > 0 ? `<span class="badge badge-danger" style="font-size:10.5px;padding:1px 6px;">${anStats.criticalOpen} Blocker</span>` : ''}
           ${anStats.orphans > 0 ? `<span class="badge badge-accent" style="font-size:10.5px;padding:1px 6px;">${anStats.orphans} sans cas lié</span>` : ''}
           ${anStats.criticalOpen === 0 && anStats.orphans === 0 ? `<span style="color:var(--success);">${anStats.total === 0 ? 'aucune anomalie' : 'tout est tracé'}</span>` : ''}
         </div>
@@ -224,7 +224,7 @@ function renderCampaignTile(p, s) {
       </div>
       <div style="margin:10px 0 8px;">
         <span class="badge ${badgeClass}">${escapeHtml(status)}</span>
-        ${s.criticalOpenAnomalies && s.criticalOpenAnomalies.length > 0 ? `<span class="badge badge-danger" style="margin-left:4px;">${s.criticalOpenAnomalies.length} critique${s.criticalOpenAnomalies.length > 1 ? 's' : ''}</span>` : ''}
+        ${s.criticalOpenAnomalies && s.criticalOpenAnomalies.length > 0 ? `<span class="badge badge-danger" style="margin-left:4px;">${s.criticalOpenAnomalies.length} Blocker</span>` : ''}
       </div>
       ${s.allCases.length > 0 ? `
         <div style="font-size:12px;color:var(--text-soft);margin-bottom:4px;display:flex;justify-content:space-between;">
@@ -288,14 +288,17 @@ function renderEnvironments(view) {
 
     <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:18px;">
       <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;">
-        <span style="color:#1F4173;">${ICON.ticket}</span>
-        <span style="font-weight:500;font-size:13.5px;">Lien Jira</span>
+        <span style="color:#1F4173;">${ICON.link}</span>
+        <span style="font-weight:500;font-size:13.5px;">Outils reliés</span>
       </div>
-      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Base URL de votre instance Jira. Les clés de tickets renseignées sur les cas seront automatiquement liées à <code style="font-family:var(--font-mono);font-size:11.5px;background:var(--surface-soft);padding:1px 4px;border-radius:3px;">[base]/browse/[clé]</code>.</div>
-      <div style="display:flex;gap:8px;align-items:center;">
-        <input type="url" id="jira-base-url" value="${escapeHtml((state.settings || {}).jiraBaseUrl || '')}" placeholder="https://votre-org.atlassian.net" style="flex:1;font-family:var(--font-mono);font-size:12.5px;">
-        <button class="btn btn-sm" id="jira-base-save">Enregistrer</button>
+      <div style="font-size:12px;color:var(--text-muted);margin-bottom:10px;">Les outils de votre entreprise, quels qu'ils soient. Le nom s'affiche dans les écrans et les rapports ; dans le modèle de lien, <code style="font-family:var(--font-mono);font-size:11.5px;background:var(--surface-soft);padding:1px 4px;border-radius:3px;">{ref}</code> est remplacé par la référence. Laissez vide ce que vous n'utilisez pas : les références restent alors du texte.</div>
+      <div style="display:grid;grid-template-columns:minmax(150px,200px) minmax(120px,180px) 1fr;gap:6px 8px;align-items:center;">
+        ${TOOL_KINDS.map(t => `
+          <div style="font-size:12.5px;" title="${escapeHtml(t.examples)}">${escapeHtml(t.label)}</div>
+          <input type="text" data-tool-name="${t.id}" value="${escapeHtml(toolSettings(t.id).name || '')}" placeholder="${escapeHtml(t.examples.split(',')[0])}" style="font-size:12.5px;">
+          <input type="text" data-tool-url="${t.id}" value="${escapeHtml(toolSettings(t.id).urlTemplate || '')}" placeholder="${escapeHtml(t.placeholder)}" style="font-family:var(--font-mono);font-size:12px;">`).join('')}
       </div>
+      <div style="margin-top:8px;"><button class="btn btn-sm" id="tools-save" data-perm="environments:update">Enregistrer</button></div>
     </div>
 
     ${envs.length === 0 ? emptyState('Aucun environnement', 'Commencez par déclarer vos environnements: Recette, Production, Mobile…') : `
@@ -322,12 +325,18 @@ function renderEnvironments(view) {
   `;
 
   document.getElementById('add-env').onclick = () => openEnvironmentModal();
-  document.getElementById('jira-base-save').onclick = () => {
-    const url = document.getElementById('jira-base-url').value.trim().replace(/\/+$/, '');
+  document.getElementById('tools-save').onclick = () => {
     if (!state.settings) state.settings = {};
-    state.settings.jiraBaseUrl = url;
+    const tools = {};
+    TOOL_KINDS.forEach(t => {
+      const name = view.querySelector(`[data-tool-name="${t.id}"]`).value.trim();
+      const urlTemplate = view.querySelector(`[data-tool-url="${t.id}"]`).value.trim();
+      if (name || urlTemplate) tools[t.id] = { name, urlTemplate };
+    });
+    state.settings.tools = tools;
+    state.settings.jiraBaseUrl = '';   // remplacé par l'outil des exigences
     save();
-    toast('Lien Jira enregistré');
+    toast('Outils reliés enregistrés');
   };
   view.querySelectorAll('[data-edit-env]').forEach(b => b.onclick = () => openEnvironmentModal(b.dataset.editEnv));
   view.querySelectorAll('[data-delete-env]').forEach(b => b.onclick = () => {
@@ -686,7 +695,7 @@ function openCsvImportModal(view) {
   let mapping = [];        // rôle choisi par colonne : '' | 'title' | 'jira' | 'steps' | 'expected'
   let importPlan = [];     // { jiraKey, title, steps, skip, reason?, warning? }
 
-  const ROLE_LABELS = { title: 'Titre', jira: 'Clé Jira', steps: 'Étapes', expected: 'Résultat attendu' };
+  const ROLE_LABELS = { title: 'Titre', jira: ticketKeyLabel(), steps: 'Étapes', expected: 'Résultat attendu' };
 
   // Une cellule « Étapes » / « Résultat attendu » = une entrée par ligne. On CONSERVE les lignes vides
   // internes (sinon l'alignement steps/expected par index se décale) ; seules les lignes vides finales
@@ -750,7 +759,7 @@ function openCsvImportModal(view) {
   function modalHtmlPhase1() {
     return `
       <div style="font-size:13px;color:var(--text-soft);margin-bottom:12px;line-height:1.5;">
-        Collez le contenu CSV ci-dessous (séparateur <code>;</code>, ou auto-détecté si <code>,</code> ou tab). À l'étape suivante, vous associerez <strong>chaque colonne à un champ</strong> (Titre, Clé Jira, Étapes, Résultat attendu). Dans une colonne « Étapes », <strong>chaque retour à la ligne de la cellule devient une étape</strong>.
+        Collez le contenu CSV ci-dessous (séparateur <code>;</code>, ou auto-détecté si <code>,</code> ou tab). À l'étape suivante, vous associerez <strong>chaque colonne à un champ</strong> (Titre, ${escapeHtml(ticketKeyLabel())}, Étapes, Résultat attendu). Dans une colonne « Étapes », <strong>chaque retour à la ligne de la cellule devient une étape</strong>.
       </div>
 
       <div class="form-row">
@@ -835,12 +844,12 @@ function openCsvImportModal(view) {
           </div>
         </div>
         <div class="form-group">
-          <label class="field-label">Doublons (clés Jira déjà liées)</label>
+          <label class="field-label">Doublons (références déjà liées)</label>
           <select id="csv-dup-mode">
             <option value="skip">Ignorer (par défaut)</option>
             <option value="duplicate">Importer quand même</option>
           </select>
-          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Une clé Jira peut déjà être liée à un cas existant.</div>
+          <div style="font-size:11px;color:var(--text-muted);margin-top:4px;">Une référence peut déjà être liée à un cas existant.</div>
         </div>
       </div>
     `;
@@ -869,7 +878,7 @@ function openCsvImportModal(view) {
   // ---- Phase 2 : mapping des colonnes ----
   function modalHtmlMap() {
     const roleOptions = (sel) => [
-      ['', '— Ignorer —'], ['title', 'Titre'], ['jira', 'Clé Jira'],
+      ['', '— Ignorer —'], ['title', 'Titre'], ['jira', ticketKeyLabel()],
       ['steps', 'Étapes (1 par ligne)'], ['expected', 'Résultat attendu (1 par ligne)'],
     ].map(([v, l]) => `<option value="${v}" ${sel === v ? 'selected' : ''}>${l}</option>`).join('');
     return `
@@ -931,7 +940,7 @@ function openCsvImportModal(view) {
             <tr>
               <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);width:30px;"></th>
               <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);width:40px;">#</th>
-              ${showJira ? '<th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);width:120px;">Clé Jira</th>' : ''}
+              ${showJira ? '<th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);width:120px;">' + escapeHtml(ticketKeyLabel()) + '</th>' : ''}
               <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);">Titre</th>
               <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);width:90px;">Étapes</th>
               <th style="text-align:left;padding:8px 10px;border-bottom:1px solid var(--border);width:140px;">Statut</th>
@@ -1052,7 +1061,7 @@ function openCsvImportModal(view) {
       );
       const item = { jiraKey, title, steps, skip: false };
       if (!title) { item.skip = true; item.reason = 'titre manquant'; return item; }
-      if (hasJira && jiraKey && existingKeys.has(jiraKey) && defaults.dupMode === 'skip') { item.skip = true; item.reason = 'clé Jira déjà liée'; return item; }
+      if (hasJira && jiraKey && existingKeys.has(jiraKey) && defaults.dupMode === 'skip') { item.skip = true; item.reason = 'référence déjà liée'; return item; }
       if (hasJira && jiraKey && seenKeys.has(jiraKey) && defaults.dupMode === 'skip') { item.skip = true; item.reason = 'doublon dans le CSV'; return item; }
       if (hasJira && jiraKey) seenKeys.add(jiraKey);
       return item;
@@ -1560,7 +1569,7 @@ function openTestCaseModal(id) {
     </div>
 
     <div class="form-group">
-      <label class="field-label">Tickets Jira <span class="hint">tickets liés (user story, bug, change). L'URL est optionnelle.</span></label>
+      <label class="field-label">${escapeHtml(ticketsLabel())} <span class="hint">tickets liés (user story, bug, change). Le lien vient de l'outil des exigences (Outils reliés).</span></label>
       <div class="jira-list" id="tc-jira-list"></div>
       <button type="button" class="btn btn-sm" id="tc-add-jira" style="margin-top:8px;align-self:flex-start;">${ICON.plus}<span>Ajouter un ticket</span></button>
     </div>
@@ -2530,7 +2539,7 @@ function renderTestPlans(view) {
                   <div style="display:flex;gap:2px;flex-shrink:0;">
                     <button class="btn-icon btn-ghost" data-plan-change="${plan.id}" title="Changement, livraisons (entry criteria), exit criteria et test completion report">${ICON.ticket}</button>
                     <button class="btn-icon btn-ghost" data-checklist-plan="${plan.id}" title="Générer une checklist testeur">${ICON.checklist}</button>
-                    <button class="btn-icon btn-ghost" data-csv-plan="${plan.id}" title="Exporter en CSV (Jira / Excel)">${ICON.export}</button>
+                    <button class="btn-icon btn-ghost" data-csv-plan="${plan.id}" title="Exporter en CSV (outil de tickets / Excel)">${ICON.export}</button>
                     <button class="btn-icon btn-ghost" data-print-plan="${plan.id}" title="Spec imprimable">${ICON.print}</button>
                     <button class="btn-icon btn-ghost" data-edit-plan="${plan.id}" title="Modifier">${ICON.edit}</button>
                     <button class="btn-icon btn-ghost" data-delete-plan="${plan.id}" title="Supprimer">${ICON.trash}</button>
@@ -3062,8 +3071,8 @@ function openTestPlanModal(id) {
       <label class="field-label">Changement <span class="hint">entry et exit criteria, test completion report : bouton « Changement et criteria » du plan</span></label>
       <div style="display:flex;gap:10px;flex-wrap:wrap;">
         <div style="flex:2;min-width:180px;">
-          <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:3px;">Numéro du changement ServiceNow</div>
-          <input type="text" id="plan-change" value="${escapeHtml(plan.changeNumber || '')}" placeholder="CHG0012345">
+          <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:3px;">${escapeHtml(changeRefLabel())}</div>
+          <input type="text" id="plan-change" value="${escapeHtml(plan.changeNumber || '')}" placeholder="Ex. CHG0012345, RFC-42">
         </div>
         <div style="flex:1;min-width:130px;">
           <div style="font-size:11.5px;color:var(--text-soft);margin-bottom:3px;">Risk level</div>
@@ -3361,7 +3370,7 @@ function renderProjectCard(p, s) {
 
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0;">
         <span class="badge ${badgeClass}">${escapeHtml(status)}</span>
-        ${s.criticalOpenAnomalies.length > 0 ? `<span class="badge badge-danger">${s.criticalOpenAnomalies.length} anomalie${s.criticalOpenAnomalies.length > 1 ? 's' : ''} critique${s.criticalOpenAnomalies.length > 1 ? 's' : ''}</span>` : ''}
+        ${s.criticalOpenAnomalies.length > 0 ? `<span class="badge badge-danger">${s.criticalOpenAnomalies.length} Blocker ouvert${s.criticalOpenAnomalies.length > 1 ? 's' : ''}</span>` : ''}
       </div>
 
       ${s.allCases.length > 0 ? `
@@ -4676,12 +4685,8 @@ function openDataTableModal(id) {
 /* Compute the full Jira URL for a ticket key, using the global Jira base URL.
    Empty string if no base URL is configured or no key. */
 function jiraUrlFor(key) {
-  if (!key) return '';
-  const base = ((state.settings || {}).jiraBaseUrl || '').trim();
-  if (!base) return '';
-  // Normalize: strip trailing slash if any
-  const cleanBase = base.replace(/\/+$/, '');
-  return cleanBase + '/browse/' + encodeURIComponent(key);
+  // Outil des exigences configuré dans « Outils reliés » (modèle de lien avec {ref}).
+  return toolUrl('requirements', key);
 }
 
 /* =====================================================================
@@ -5054,11 +5059,12 @@ function openBlockPicker(onSelect) {
    ===================================================================== */
 function anomalyStateBadgeClass(stateId) {
   const map = {
-    discovered: 'badge-danger',
-    in_progress: 'badge-primary',
-    workaround_pending: 'badge-accent',
-    workaround_accepted: 'badge-muted',
-    fixed: 'badge-success',
+    new: 'badge-danger',
+    triaged: 'badge-accent',
+    in_fix: 'badge-primary',
+    ready_for_retest: 'badge-warning',
+    reopened: 'badge-danger',
+    deferred: 'badge-muted',
     closed: 'badge-success',
     rejected: 'badge-muted',
   };
@@ -5078,10 +5084,25 @@ function anomalySeverityBadgeClass(sevId) {
 function anomalyStateLabel(id) { return (ANOMALY_STATES.find(s => s.id === id) || {}).label || id; }
 function anomalyTypeLabel(id) { return (ANOMALY_TYPES.find(t => t.id === id) || {}).label || id; }
 function anomalySeverityLabel(id) { return (ANOMALY_SEVERITIES.find(s => s.id === id) || {}).label || id; }
+function anomalyPriorityLabel(id) { return (ANOMALY_PRIORITIES.find(p => p.id === id) || {}).label || ''; }
+function anomalyListLabel(list, id) { return (list.find(x => x.id === id) || {}).label || ''; }
 
 function anomalyIsOpen(a) {
   const st = ANOMALY_STATES.find(s => s.id === a.state);
   return st && st.kind === 'open';
+}
+
+/* Âge en jours : depuis la détection, jusqu'à la clôture pour un defect fermé. */
+function anomalyAgeDays(a) {
+  const start = new Date((a.detectedAt || String(a.createdAt || '').slice(0, 10)) + 'T00:00:00');
+  if (isNaN(start)) return null;
+  const end = !anomalyIsOpen(a) && a.resolvedAt ? new Date(a.resolvedAt) : new Date();
+  return Math.max(0, Math.floor((end - start) / 86400000));
+}
+function anomalyReopenCount(a) { return (a.history || []).filter(h => h.to === 'reopened').length; }
+/* Champs obligatoires du defect report encore vides */
+function defectReportMissing(a) {
+  return DEFECT_REPORT_REQUIRED.filter(f => !String(a[f.key] || '').trim());
 }
 
 function anomalyStats() {
@@ -5093,6 +5114,7 @@ function anomalyStats() {
     total: all.length,
     open: open.length,
     closed: all.length - open.length,
+    toTriage: open.filter(a => a.state === 'new' || a.state === 'reopened').length,
     orphans: orphans.length,
     criticalOpen: criticalOpen.length,
     orphansList: orphans,
@@ -5104,25 +5126,39 @@ function renderAnomalies(view) {
   const all = state.anomalies || [];
   const stats = anomalyStats();
 
-  // Sort: open first, then severity (critical→trivial), then createdAt desc
+  // Tri : severity (Blocker → Cosmetic), puis priority, puis âge décroissant
   const SEV_ORDER = { critical: 0, major: 1, minor: 2, trivial: 3 };
+  const PRIO_ORDER = { p1: 0, p2: 1, p3: 2, p4: 3 };
   const sorted = [...all].sort((a, b) => {
-    const ao = anomalyIsOpen(a) ? 0 : 1;
-    const bo = anomalyIsOpen(b) ? 0 : 1;
-    if (ao !== bo) return ao - bo;
     const sa = SEV_ORDER[a.severity] != null ? SEV_ORDER[a.severity] : 9;
     const sb = SEV_ORDER[b.severity] != null ? SEV_ORDER[b.severity] : 9;
     if (sa !== sb) return sa - sb;
-    return (b.createdAt || '').localeCompare(a.createdAt || '');
+    const pa = PRIO_ORDER[a.priority] != null ? PRIO_ORDER[a.priority] : 9;
+    const pb = PRIO_ORDER[b.priority] != null ? PRIO_ORDER[b.priority] : 9;
+    if (pa !== pb) return pa - pb;
+    return (anomalyAgeDays(b) || 0) - (anomalyAgeDays(a) || 0);
   });
-  const openList = sorted.filter(anomalyIsOpen);
+  // Groupes du defect triage : à trier (New, Reopened), en cours, fermés
+  const toTriage = sorted.filter(a => a.state === 'new' || a.state === 'reopened');
+  const inProgress = sorted.filter(a => anomalyIsOpen(a) && a.state !== 'new' && a.state !== 'reopened');
   const closedList = sorted.filter(a => !anomalyIsOpen(a));
+  const section = (title, icon, list, faded) => list.length === 0 ? '' : `
+    <div class="folder-section"${faded ? ' style="opacity:0.85;"' : ''}>
+      <div class="folder-header">
+        ${icon}
+        <span>${title}</span>
+        <span class="count">${list.length}</span>
+      </div>
+      <div class="card-grid">
+        ${list.map(renderAnomalyCard).join('')}
+      </div>
+    </div>`;
 
   view.innerHTML = `
     <div class="page-header">
       <div>
         <h1>Anomalies</h1>
-        <div class="subtitle">Défauts découverts pendant les tests. Liez chaque anomalie au cas de test qui l'a révélée.</div>
+        <div class="subtitle">Defect management : un seul circuit, du signalement à la clôture. Liez chaque defect au test case qui l'a révélé.</div>
       </div>
       <div class="actions">
         <button class="btn btn-primary" id="add-anomaly" data-perm="anomalies:create">${ICON.plus}<span>Nouvelle anomalie</span></button>
@@ -5142,39 +5178,17 @@ function renderAnomalies(view) {
     ${all.length > 0 ? `
       <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:20px;">
         <span class="badge">${stats.total} total</span>
+        <span class="badge ${stats.toTriage > 0 ? 'badge-danger' : 'badge-muted'}">${stats.toTriage} à trier</span>
         <span class="badge ${stats.open > 0 ? 'badge-accent' : 'badge-muted'}">${stats.open} ouverte${stats.open > 1 ? 's' : ''}</span>
-        ${stats.criticalOpen > 0 ? `<span class="badge badge-danger">${stats.criticalOpen} critique${stats.criticalOpen > 1 ? 's' : ''} ouverte${stats.criticalOpen > 1 ? 's' : ''}</span>` : ''}
+        ${stats.criticalOpen > 0 ? `<span class="badge badge-danger">${stats.criticalOpen} Blocker ouvert${stats.criticalOpen > 1 ? 's' : ''}</span>` : ''}
         <span class="badge badge-success">${stats.closed} fermée${stats.closed > 1 ? 's' : ''}</span>
       </div>
     ` : ''}
 
     ${all.length === 0 ? emptyState('Aucune anomalie', 'Cliquez sur « Nouvelle anomalie » pour enregistrer un défaut.') : ''}
-
-    ${openList.length > 0 ? `
-      <div class="folder-section">
-        <div class="folder-header">
-          ${ICON.alert}
-          <span>Anomalies ouvertes</span>
-          <span class="count">${openList.length}</span>
-        </div>
-        <div class="card-grid">
-          ${openList.map(renderAnomalyCard).join('')}
-        </div>
-      </div>
-    ` : ''}
-
-    ${closedList.length > 0 ? `
-      <div class="folder-section" style="opacity:0.85;">
-        <div class="folder-header">
-          ${ICON.case}
-          <span>Anomalies fermées</span>
-          <span class="count">${closedList.length}</span>
-        </div>
-        <div class="card-grid">
-          ${closedList.map(renderAnomalyCard).join('')}
-        </div>
-      </div>
-    ` : ''}
+    ${section('À trier · New et Reopened', ICON.alert, toTriage, false)}
+    ${section('En cours', ICON.bug, inProgress, false)}
+    ${section('Fermées · Closed et Rejected', ICON.case, closedList, true)}
   `;
 
   document.getElementById('add-anomaly').onclick = () => openAnomalyModal();
@@ -5198,9 +5212,13 @@ function renderAnomalyCard(a) {
     .map(id => state.testCases.find(c => c.id === id))
     .filter(Boolean);
   const orphan = linkedCases.length === 0;
-  const desc = a.description || '';
+  const desc = a.actualResult || a.description || '';
   const descPreview = desc.slice(0, 180);
   const truncated = desc.length > 180;
+  const age = anomalyAgeDays(a);
+  const reopened = anomalyReopenCount(a);
+  const missing = a.state === 'new' ? defectReportMissing(a) : [];
+  const extUrl = a.externalRef ? toolUrl('defects', a.externalRef) : '';
 
   return `
     <div class="card">
@@ -5213,8 +5231,15 @@ function renderAnomalyCard(a) {
       </div>
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0 10px;align-items:center;">
         <span class="badge ${anomalyStateBadgeClass(a.state)}">${escapeHtml(anomalyStateLabel(a.state))}</span>
-        <span class="badge ${anomalySeverityBadgeClass(a.severity)}">${escapeHtml(anomalySeverityLabel(a.severity))}</span>
+        <span class="badge ${anomalySeverityBadgeClass(a.severity)}" title="Severity : l'impact">${escapeHtml(anomalySeverityLabel(a.severity))}</span>
+        ${a.priority ? `<span class="badge badge-primary" title="Priority : l'urgence de la correction">${escapeHtml(anomalyPriorityLabel(a.priority))}</span>` : (anomalyIsOpen(a) ? '<span class="badge badge-muted" title="La priority se fixe au defect triage">Priority à fixer</span>' : '')}
         <span class="badge">${escapeHtml(anomalyTypeLabel(a.type))}</span>
+        ${age !== null ? `<span class="badge" title="${anomalyIsOpen(a) ? 'Âge depuis la détection' : 'Durée de la détection à la clôture'}">${age} j</span>` : ''}
+        ${reopened ? `<span class="badge badge-warning">Rouvert ×${reopened}</span>` : ''}
+        ${a.legacyClosure ? '<span class="badge badge-muted" title="Clôturé avant le processus : confirmation testing et root cause non tracés">Clôture ancienne</span>' : ''}
+        ${a.externalRef ? (extUrl
+          ? `<a class="jira-pill" href="${escapeHtml(extUrl)}" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(a.externalRef)}<span class="ext-icon">${ICON.externalLink}</span></a>`
+          : `<span class="jira-pill">${escapeHtml(a.externalRef)}</span>`) : ''}
         ${(a.jiraTickets || []).filter(t => t.key).slice(0, 3).map(t => {
           const tooltip = t.summary || t.key;
           const url = jiraUrlFor(t.key);
@@ -5223,6 +5248,7 @@ function renderAnomalyCard(a) {
         }).join('')}
         ${(a.jiraTickets || []).filter(t => t.key).length > 3 ? `<span class="jira-pill" title="${escapeHtml((a.jiraTickets || []).filter(t => t.key).slice(3).map(t => t.key + (t.summary ? ' — ' + t.summary : '')).join('\n'))}">+${(a.jiraTickets || []).filter(t => t.key).length - 3}</span>` : ''}
       </div>
+      ${missing.length ? `<div style="font-size:11.5px;color:#8a6a25;margin:-4px 0 8px;">Defect report incomplet : ${missing.map(f => escapeHtml(f.label)).join(', ')}</div>` : ''}
       ${descPreview ? `
         <p style="font-size:12.5px;color:var(--text-soft);margin:0 0 10px;line-height:1.5;">
           ${escapeHtml(descPreview)}${truncated ? '…' : ''}
@@ -5232,9 +5258,9 @@ function renderAnomalyCard(a) {
         ${orphan
           ? `<span class="badge badge-danger" style="font-size:10.5px;padding:1px 6px;">⚠ Sans cas lié</span>`
           : `<span style="display:inline-flex;align-items:center;gap:4px;flex-shrink:0;">${ICON.link}${linkedCases.length} cas lié${linkedCases.length > 1 ? 's' : ''}</span>`}
+        ${a.assignee ? `<span title="Assigné à">→ ${escapeHtml(a.assignee)}</span>` : ''}
         ${(a.screenshots || []).length > 0 ? `<span>${(a.screenshots || []).length} capture${(a.screenshots || []).length > 1 ? 's' : ''}</span>` : ''}
-        ${a.peopleInvolved ? `<span title="${escapeHtml(a.peopleInvolved)}">${escapeHtml(a.peopleInvolved.length > 30 ? a.peopleInvolved.slice(0, 30) + '…' : a.peopleInvolved)}</span>` : ''}
-        ${a.createdAt ? `<span style="margin-left:auto;">${escapeHtml((a.createdAt || '').slice(0, 10))}</span>` : ''}
+        ${a.detectedAt ? `<span style="margin-left:auto;" title="Détecté le">${escapeHtml(a.detectedAt)}</span>` : ''}
       </div>
       ${linkedCases.length > 0 ? `
         <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:8px;">
@@ -5258,18 +5284,32 @@ function openAnomalyModal(id) {
         description: '',
         type: 'functional',
         severity: 'major',
-        state: 'discovered',
+        priority: '',
+        state: 'new',
         testCaseIds: [],
         workaround: '',
         solution: '',
         peopleInvolved: '',
+        assignee: '',
         screenshots: [],
         jiraTickets: [],
+        environmentId: '', testedVersion: '', changeRef: '', externalRef: '',
+        stepsToReproduce: '', expectedResult: '', testOracle: '', actualResult: '', evidence: '', testDataUsed: '',
+        fixVersion: '', deferredBy: '', deferredUntil: '', deferredReason: '', rejectReason: '', reopenReason: '',
+        rootCause: '', rootCauseNote: '', confirmationTested: false, targetedRegressionDone: false,
+        history: [],
+        detectedAt: today(),
         createdAt: new Date().toISOString(),
         resolvedAt: null,
+        fixedAt: null,
       }
     : JSON.parse(JSON.stringify(state.anomalies.find(a => a.id === id)));
   if (!Array.isArray(anomaly.jiraTickets)) anomaly.jiraTickets = [];
+  if (!Array.isArray(anomaly.history)) anomaly.history = [];
+  const fromState = anomaly.state || 'new';
+  const v = k => escapeHtml(anomaly[k] || '');
+  const stateOptions = [fromState, ...(ANOMALY_TRANSITIONS[fromState] || [])];
+  const defectsToolName = toolName('defects');
 
   // Group test cases by folder for the picker
   const grouped = {};
@@ -5279,37 +5319,144 @@ function openAnomalyModal(id) {
     grouped[f.id].cases.push(c);
   });
   const groupedSorted = Object.values(grouped).sort((a, b) => a.folder.name.localeCompare(b.folder.name));
+  const options = (list, current, empty) => (empty ? `<option value="">${escapeHtml(empty)}</option>` : '')
+    + list.map(x => `<option value="${x.id}" ${current === x.id ? 'selected' : ''}${x.desc ? ` title="${escapeHtml(x.desc)}"` : ''}>${escapeHtml(x.label)}</option>`).join('');
 
   openModal(isNew ? 'Nouvelle anomalie' : "Modifier l'anomalie", `
     <div class="form-group">
-      <label class="field-label">Titre <span class="required">*</span></label>
-      <input type="text" id="an-title" value="${escapeHtml(anomaly.title)}" placeholder="Ex. Calcul TVA incorrect en cas de remise négative">
+      <label class="field-label">Titre <span class="required">*</span> <span class="hint">[ce qui ne va pas], [où], quand [condition]</span></label>
+      <input type="text" id="an-title" value="${v('title')}" placeholder="Ex. Total de la facture faux, écran de facturation, quand une remise est appliquée">
     </div>
 
     <div class="form-row form-row-3">
       <div class="form-group">
-        <label class="field-label">État</label>
+        <label class="field-label">État <span class="hint">defect lifecycle</span></label>
         <select id="an-state">
-          ${ANOMALY_STATES.map(s => `<option value="${s.id}" ${anomaly.state === s.id ? 'selected' : ''}>${escapeHtml(s.label)}</option>`).join('')}
+          ${stateOptions.map(sid => `<option value="${sid}" ${fromState === sid ? 'selected' : ''}>${escapeHtml(anomalyStateLabel(sid))}${sid === fromState ? ' (actuel)' : ''}</option>`).join('')}
         </select>
       </div>
       <div class="form-group">
-        <label class="field-label">Sévérité</label>
-        <select id="an-severity">
-          ${ANOMALY_SEVERITIES.map(s => `<option value="${s.id}" ${anomaly.severity === s.id ? 'selected' : ''} title="${escapeHtml(s.desc)}">${escapeHtml(s.label)}</option>`).join('')}
-        </select>
+        <label class="field-label">Severity <span class="hint">l'impact</span></label>
+        <select id="an-severity">${options(ANOMALY_SEVERITIES, anomaly.severity)}</select>
+      </div>
+      <div class="form-group">
+        <label class="field-label">Priority <span class="hint">l'urgence, fixée au triage</span></label>
+        <select id="an-priority">${options(ANOMALY_PRIORITIES, anomaly.priority, '— à fixer au defect triage —')}</select>
+      </div>
+    </div>
+    <div id="an-state-hint" style="font-size:12px;color:var(--text-soft);margin:-6px 0 12px;"></div>
+
+    <div class="form-row form-row-3">
+      <div class="form-group">
+        <label class="field-label">Assigné à</label>
+        <input type="text" id="an-assignee" value="${v('assignee')}" placeholder="Qui corrige">
+      </div>
+      <div class="form-group">
+        <label class="field-label">Détecté le</label>
+        <input type="date" id="an-detected" value="${v('detectedAt')}">
       </div>
       <div class="form-group">
         <label class="field-label">Type ISTQB</label>
-        <select id="an-type">
-          ${ANOMALY_TYPES.map(t => `<option value="${t.id}" ${anomaly.type === t.id ? 'selected' : ''} title="${escapeHtml(t.desc)}">${escapeHtml(t.label)}</option>`).join('')}
-        </select>
+        <select id="an-type">${options(ANOMALY_TYPES, anomaly.type)}</select>
       </div>
     </div>
 
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="field-label">Defect report <span class="hint">champs marqués * obligatoires pour quitter l'état New</span></label>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label">Test environment <span class="required">*</span></label>
+        <select id="an-env">${options((state.environments || []).map(e => ({ id: e.id, label: e.title })), anomaly.environmentId, '—')}</select>
+      </div>
+      <div class="form-group">
+        <label class="field-label">Version testée <span class="required">*</span></label>
+        <input type="text" id="an-version" value="${v('testedVersion')}" placeholder="Version ou livraison">
+      </div>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label">${escapeHtml(changeRefLabel())} ou exigence</label>
+        <input type="text" id="an-change" value="${v('changeRef')}" placeholder="Référence">
+      </div>
+      <div class="form-group">
+        <label class="field-label">${escapeHtml(defectsToolName ? `Référence dans ${defectsToolName}` : 'Référence dans l’outil des defects')} <span class="hint">si les defects vivent aussi ailleurs</span></label>
+        <input type="text" id="an-external" value="${v('externalRef')}" placeholder="Référence externe">
+      </div>
+    </div>
     <div class="form-group">
-      <label class="field-label">Description <span class="required">*</span></label>
-      <textarea id="an-description" rows="4" placeholder="Décrivez le comportement constaté, les étapes pour reproduire, et le comportement attendu.">${escapeHtml(anomaly.description)}</textarea>
+      <label class="field-label">Étapes pour reproduire <span class="required">*</span></label>
+      <textarea id="an-steps" rows="4" placeholder="1. …&#10;2. …&#10;3. …">${v('stepsToReproduce')}</textarea>
+      <button type="button" class="btn btn-sm" id="an-steps-from-case" style="margin-top:6px;align-self:flex-start;">Reprendre les étapes du test case lié</button>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label">Expected result <span class="required">*</span></label>
+        <textarea id="an-expected" rows="2">${v('expectedResult')}</textarea>
+      </div>
+      <div class="form-group">
+        <label class="field-label">Test oracle <span class="hint">d'où vient l'expected result</span></label>
+        <input type="text" id="an-oracle" value="${v('testOracle')}" placeholder="Spécification, règle métier, comportement en production…">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="field-label">Actual result <span class="required">*</span></label>
+      <textarea id="an-actual" rows="2">${v('actualResult')}</textarea>
+    </div>
+    <div class="form-row">
+      <div class="form-group">
+        <label class="field-label">Preuve <span class="hint">journal, numéro de document ; captures plus bas</span></label>
+        <input type="text" id="an-evidence" value="${v('evidence')}">
+      </div>
+      <div class="form-group">
+        <label class="field-label">Test data utilisées <span class="hint">aucune donnée réelle de client</span></label>
+        <input type="text" id="an-testdata" value="${v('testDataUsed')}" placeholder="Numéros des objets de test">
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="field-label">Description / contexte <span class="hint">optionnel</span></label>
+      <textarea id="an-description" rows="2">${v('description')}</textarea>
+    </div>
+
+    <div class="form-row" data-an-when="deferred">
+      <div class="form-group">
+        <label class="field-label">Qui accepte le risque <span class="required">*</span></label>
+        <input type="text" id="an-deferred-by" value="${v('deferredBy')}" placeholder="Nom et fonction">
+      </div>
+      <div class="form-group">
+        <label class="field-label">Jusqu'à quand <span class="required">*</span></label>
+        <input type="date" id="an-deferred-until" value="${v('deferredUntil')}">
+      </div>
+    </div>
+    <div class="form-group" data-an-when="deferred">
+      <label class="field-label">Raison du report</label>
+      <input type="text" id="an-deferred-reason" value="${v('deferredReason')}">
+    </div>
+    <div class="form-group" data-an-when="rejected">
+      <label class="field-label">Motif du rejet <span class="required">*</span></label>
+      <select id="an-reject-reason">${options(ANOMALY_REJECT_REASONS, anomaly.rejectReason, '—')}</select>
+    </div>
+    <div class="form-group" data-an-when="ready_for_retest closed">
+      <label class="field-label">Version qui contient la correction <span class="required">*</span></label>
+      <input type="text" id="an-fix-version" value="${v('fixVersion')}">
+    </div>
+    <div class="form-group" data-an-when="reopened">
+      <label class="field-label">Motif de réouverture <span class="required">*</span></label>
+      <select id="an-reopen-reason">${options(ANOMALY_REOPEN_REASONS, '', '—')}</select>
+    </div>
+    <div data-an-when="closed">
+      <div class="form-row">
+        <div class="form-group">
+          <label class="field-label">Root cause <span class="required">*</span> <span class="hint">analysée chaque mois pour la defect prevention</span></label>
+          <select id="an-root-cause">${options(ANOMALY_ROOT_CAUSES, anomaly.rootCause, '—')}</select>
+        </div>
+        <div class="form-group">
+          <label class="field-label">Précision sur la root cause</label>
+          <input type="text" id="an-root-note" value="${v('rootCauseNote')}">
+        </div>
+      </div>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0;"><input type="checkbox" id="an-confirmed" ${anomaly.confirmationTested ? 'checked' : ''}> Confirmation testing fait <span class="required">*</span></label>
+      <label style="display:flex;gap:8px;align-items:center;font-size:13px;margin:2px 0 12px;"><input type="checkbox" id="an-regression" ${anomaly.targetedRegressionDone ? 'checked' : ''}> Targeted regression rejouée <span class="required">*</span></label>
     </div>
 
     <div class="form-group">
@@ -5349,21 +5496,21 @@ function openAnomalyModal(id) {
     <div class="form-row">
       <div class="form-group">
         <label class="field-label">Contournement <span class="hint">si applicable</span></label>
-        <textarea id="an-workaround" rows="3" placeholder="Comment l'utilisateur peut éviter le problème en attendant le correctif.">${escapeHtml(anomaly.workaround)}</textarea>
+        <textarea id="an-workaround" rows="3" placeholder="Comment l'utilisateur peut éviter le problème en attendant le correctif.">${v('workaround')}</textarea>
       </div>
       <div class="form-group">
         <label class="field-label">Solution <span class="hint">une fois résolue</span></label>
-        <textarea id="an-solution" rows="3" placeholder="Description du correctif appliqué.">${escapeHtml(anomaly.solution)}</textarea>
+        <textarea id="an-solution" rows="3" placeholder="Description du correctif appliqué.">${v('solution')}</textarea>
       </div>
     </div>
 
     <div class="form-group">
       <label class="field-label">Personnes impliquées</label>
-      <input type="text" id="an-people" value="${escapeHtml(anomaly.peopleInvolved)}" placeholder="Ex. Sophie Lambert (dev), Marc Dubois (PO), Jean Dupont (testeur)">
+      <input type="text" id="an-people" value="${v('peopleInvolved')}" placeholder="Rôles ou noms : développeur, PO, testeur…">
     </div>
 
     <div class="form-group">
-      <label class="field-label">Tickets Jira <span class="hint">tickets de suivi (bug, change). L'URL est dérivée du paramètre Jira global.</span></label>
+      <label class="field-label">${escapeHtml(ticketsLabel())} <span class="hint">tickets de suivi (bug, change). Le lien vient de l'outil des exigences (Outils reliés).</span></label>
       <div class="jira-list" id="an-jira-list"></div>
       <button type="button" class="btn btn-sm" id="an-add-jira" style="margin-top:8px;align-self:flex-start;">${ICON.plus}<span>Ajouter un ticket</span></button>
     </div>
@@ -5375,16 +5522,43 @@ function openAnomalyModal(id) {
       <button type="button" class="btn" id="an-add-shot">${ICON.image}<span>Ajouter une capture</span></button>
     </div>
 
-    ${anomaly.createdAt ? `
-      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);display:flex;gap:18px;flex-wrap:wrap;">
-        <span>Créée le <strong>${escapeHtml((anomaly.createdAt || '').slice(0, 10))}</strong></span>
-        ${anomaly.resolvedAt ? `<span>Fermée le <strong>${escapeHtml((anomaly.resolvedAt || '').slice(0, 10))}</strong></span>` : ''}
+    ${!isNew ? `
+      <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-muted);">
+        <div style="display:flex;gap:18px;flex-wrap:wrap;margin-bottom:6px;">
+          <span>Âge <strong>${anomalyAgeDays(anomaly) !== null ? anomalyAgeDays(anomaly) + ' j' : '–'}</strong></span>
+          ${anomaly.resolvedAt ? `<span>Fermée le <strong>${escapeHtml((anomaly.resolvedAt || '').slice(0, 10))}</strong></span>` : ''}
+          ${anomalyReopenCount(anomaly) ? `<span>Rouverte <strong>${anomalyReopenCount(anomaly)} fois</strong></span>` : ''}
+          ${anomaly.legacyClosure ? '<span>Clôturée avant le processus : confirmation testing et root cause non tracés.</span>' : ''}
+        </div>
+        ${anomaly.history.length ? `<div><strong style="color:var(--text-soft);">Historique</strong><ul style="margin:4px 0 0;padding-left:18px;">${anomaly.history.slice().reverse().map(h => `
+          <li>${escapeHtml(new Date(h.at).toLocaleString('fr-CH'))} · ${escapeHtml(h.by || '—')} : ${escapeHtml(anomalyStateLabel(h.from) || '—')} → <strong>${escapeHtml(anomalyStateLabel(h.to))}</strong>${h.reason ? ` · ${escapeHtml(h.reason)}` : ''}</li>`).join('')}</ul></div>` : ''}
       </div>
     ` : ''}
   `, `
     <button class="btn" data-close-modal>Annuler</button>
     <button class="btn btn-primary" id="an-save">${isNew ? 'Créer' : 'Enregistrer'}</button>
   `, (body) => {
+    // Blocs propres à l'état choisi (report, rejet, correction, réouverture, clôture)
+    const stateSel = body.querySelector('#an-state');
+    const syncState = () => {
+      const s = stateSel.value;
+      body.querySelectorAll('[data-an-when]').forEach(b => { b.style.display = b.dataset.anWhen.split(' ').includes(s) ? '' : 'none'; });
+      const meta = ANOMALY_STATES.find(x => x.id === s) || {};
+      body.querySelector('#an-state-hint').textContent = meta.who ? `${meta.label} · qui : ${meta.who} · à faire : ${meta.todo}` : '';
+    };
+    stateSel.addEventListener('change', syncState);
+    syncState();
+
+    body.querySelector('#an-steps-from-case').onclick = () => {
+      const caseId = (body.querySelector('#an-cases input:checked') || {}).value;
+      const c = caseId && state.testCases.find(x => x.id === caseId);
+      if (!c) { toast('Cochez d’abord le test case lié, plus bas'); return; }
+      const lines = expandSteps(c.steps || []).filter(s => (s.action || '').trim() || (s.expected || '').trim())
+        .map((s, i) => `${i + 1}. ${s.action || ''}${s.expected ? ` (attendu : ${s.expected})` : ''}`);
+      const ta = body.querySelector('#an-steps');
+      ta.value = (ta.value.trim() ? ta.value.trim() + '\n' : '') + lines.join('\n');
+    };
+
     function renderShots() {
       const grid = body.querySelector('#an-shots-grid');
       if (!anomaly.screenshots || anomaly.screenshots.length === 0) {
@@ -5516,33 +5690,79 @@ function openAnomalyModal(id) {
     };
 
     document.getElementById('an-save').onclick = () => {
-      const title = body.querySelector('#an-title').value.trim();
-      const description = body.querySelector('#an-description').value.trim();
-      if (!title) { toast('Le titre est requis'); return; }
-      if (!description) { toast('La description est requise'); return; }
-
-      const newState = body.querySelector('#an-state').value;
-      const stateMeta = ANOMALY_STATES.find(s => s.id === newState);
-      const willBeOpen = stateMeta && stateMeta.kind === 'open';
-
-      anomaly.title = title;
-      anomaly.description = description;
-      anomaly.state = newState;
+      const val = sel => body.querySelector(sel).value.trim();
+      const toState = stateSel.value;
+      anomaly.title = val('#an-title');
       anomaly.severity = body.querySelector('#an-severity').value;
+      anomaly.priority = body.querySelector('#an-priority').value;
       anomaly.type = body.querySelector('#an-type').value;
+      anomaly.assignee = val('#an-assignee');
+      anomaly.detectedAt = body.querySelector('#an-detected').value || anomaly.detectedAt || today();
+      anomaly.environmentId = body.querySelector('#an-env').value;
+      anomaly.testedVersion = val('#an-version');
+      anomaly.changeRef = val('#an-change');
+      anomaly.externalRef = val('#an-external');
+      anomaly.stepsToReproduce = val('#an-steps');
+      anomaly.expectedResult = val('#an-expected');
+      anomaly.testOracle = val('#an-oracle');
+      anomaly.actualResult = val('#an-actual');
+      anomaly.evidence = val('#an-evidence');
+      anomaly.testDataUsed = val('#an-testdata');
+      anomaly.description = val('#an-description');
+      anomaly.deferredBy = val('#an-deferred-by');
+      anomaly.deferredUntil = body.querySelector('#an-deferred-until').value;
+      anomaly.deferredReason = val('#an-deferred-reason');
+      anomaly.rejectReason = body.querySelector('#an-reject-reason').value;
+      anomaly.fixVersion = val('#an-fix-version');
+      anomaly.rootCause = body.querySelector('#an-root-cause').value;
+      anomaly.rootCauseNote = val('#an-root-note');
+      anomaly.confirmationTested = body.querySelector('#an-confirmed').checked;
+      anomaly.targetedRegressionDone = body.querySelector('#an-regression').checked;
+      const reopenReason = body.querySelector('#an-reopen-reason').value;
       anomaly.testCaseIds = Array.from(body.querySelectorAll('#an-cases input:checked')).map(i => i.value);
-      anomaly.workaround = body.querySelector('#an-workaround').value.trim();
-      anomaly.solution = body.querySelector('#an-solution').value.trim();
-      anomaly.peopleInvolved = body.querySelector('#an-people').value.trim();
+      anomaly.workaround = val('#an-workaround');
+      anomaly.solution = val('#an-solution');
+      anomaly.peopleInvolved = val('#an-people');
       anomaly.jiraTickets = (anomaly.jiraTickets || [])
         .map(t => ({ key: (t.key || '').trim().toUpperCase(), summary: (t.summary || '').trim() }))
         .filter(t => t.key || t.summary);
 
-      // Auto manage resolvedAt
-      if (!willBeOpen && !anomaly.resolvedAt) {
-        anomaly.resolvedAt = new Date().toISOString();
-      } else if (willBeOpen && anomaly.resolvedAt) {
-        anomaly.resolvedAt = null;
+      if (!anomaly.title) { toast('Le titre est requis'); return; }
+      // Règles du modèle « Defect management », vérifiées au changement d'état
+      if (toState !== fromState) {
+        const problems = [];
+        if (toState !== 'new' && toState !== 'rejected') {
+          const missing = defectReportMissing(anomaly);
+          if (missing.length) problems.push(`defect report incomplet (${missing.map(f => f.label).join(', ')}) : un defect incomplet reste à l'état New`);
+        }
+        if (['triaged', 'in_fix', 'ready_for_retest', 'reopened'].includes(toState)) {
+          if (!anomaly.priority) problems.push('priority à fixer');
+          if (!anomaly.assignee) problems.push('personne assignée');
+        }
+        if (toState === 'deferred' && (!anomaly.deferredBy || !anomaly.deferredUntil)) problems.push('qui accepte le risque, et jusqu’à quand');
+        if (toState === 'rejected' && !anomaly.rejectReason) problems.push('motif du rejet');
+        if (toState === 'ready_for_retest' && !anomaly.fixVersion) problems.push('version qui contient la correction');
+        if (toState === 'reopened' && !reopenReason) problems.push('motif de réouverture');
+        if (toState === 'closed') {
+          if (!anomaly.rootCause) problems.push('root cause');
+          if (!anomaly.confirmationTested || !anomaly.targetedRegressionDone) problems.push('confirmation testing et targeted regression');
+        }
+        if (problems.length) { toast(`Pour passer à ${anomalyStateLabel(toState)} : ${problems.join(' ; ')}`); return; }
+
+        const reason = toState === 'reopened' ? anomalyListLabel(ANOMALY_REOPEN_REASONS, reopenReason)
+          : toState === 'rejected' ? anomalyListLabel(ANOMALY_REJECT_REASONS, anomaly.rejectReason)
+          : toState === 'deferred' ? `risque accepté par ${anomaly.deferredBy} jusqu’au ${anomaly.deferredUntil}`
+          : toState === 'closed' ? `root cause : ${anomalyListLabel(ANOMALY_ROOT_CAUSES, anomaly.rootCause)}`
+          : toState === 'ready_for_retest' ? `corrigé dans ${anomaly.fixVersion}` : '';
+        anomaly.history.push({ at: new Date().toISOString(), by: (QASession.username && QASession.username()) || '', from: isNew ? null : fromState, to: toState, reason });
+        if (toState === 'reopened') { anomaly.reopenReason = reopenReason; anomaly.confirmationTested = false; anomaly.targetedRegressionDone = false; }
+        if (toState === 'ready_for_retest') anomaly.fixedAt = new Date().toISOString();
+        if (toState === 'closed') delete anomaly.legacyClosure;
+        const willBeOpen = (ANOMALY_STATES.find(s => s.id === toState) || {}).kind === 'open';
+        anomaly.resolvedAt = willBeOpen ? null : new Date().toISOString();
+        anomaly.state = toState;
+      } else if (isNew) {
+        anomaly.history.push({ at: new Date().toISOString(), by: (QASession.username && QASession.username()) || '', from: null, to: toState, reason: 'signalé' });
       }
 
       if (isNew) {

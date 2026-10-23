@@ -88,6 +88,29 @@ const tooltip = (() => {
 const today = () => new Date().toISOString().slice(0, 10);
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
 
+/* ===== Outils reliés =====
+   Chaque entreprise a ses outils : rien n'est imposé. On configure pour chaque usage un nom
+   affiché et un modèle de lien où {ref} est remplacé par la référence (onglet Environnements,
+   « Outils reliés »). Sans configuration, les références restent du texte, sans lien. */
+const TOOL_KINDS = [
+  { id: 'requirements', label: 'Exigences et tickets', examples: 'Jira, Azure DevOps, Redmine, GitLab…', placeholder: 'https://votre-org.atlassian.net/browse/{ref}' },
+  { id: 'changes', label: 'Changements (CAB)', examples: 'ServiceNow, Jira Service Management, GLPI, iTop…', placeholder: 'https://outil/change?number={ref}' },
+  { id: 'defects', label: 'Defects (outil externe)', examples: 'Jira, Azure DevOps, Mantis, Bugzilla…', placeholder: 'https://outil/browse/{ref}' },
+  { id: 'automation', label: 'Automatisation des tests', examples: 'Tosca, Playwright, Cypress, Robot Framework…', placeholder: 'https://outil/tests/{ref}' },
+];
+function toolSettings(kind) { return ((state.settings || {}).tools || {})[kind] || {}; }
+function toolName(kind) { return String(toolSettings(kind).name || '').trim(); }
+function toolUrl(kind, ref) {
+  const tpl = String(toolSettings(kind).urlTemplate || '').trim();
+  if (!tpl || !ref) return '';
+  const r = encodeURIComponent(String(ref).trim());
+  return tpl.includes('{ref}') ? tpl.split('{ref}').join(r) : tpl.replace(/\/+$/, '') + '/' + r;
+}
+/* Libellés des tickets d'exigences : « Tickets Jira » si l'outil s'appelle Jira, sinon « Tickets ». */
+const ticketsLabel = () => (toolName('requirements') ? `Tickets ${toolName('requirements')}` : 'Tickets');
+const ticketKeyLabel = () => (toolName('requirements') ? `Clé ${toolName('requirements')}` : 'Clé du ticket');
+const changeRefLabel = () => (toolName('changes') ? `Référence du changement (${toolName('changes')})` : 'Référence du changement');
+
 /* ===== Folder logic =====
    - 1 environnement → dossier de cet environnement
    - 2+ environnements → dossier "Transverse"

@@ -391,7 +391,7 @@ ${sections.map(sec => `
         ${envNames ? `<div style="font-size:12.5px;color:#6B7280;margin-bottom:8px;"><strong>Environnements:</strong> ${escapeHtml(envNames)}</div>` : ''}
         ${(c.jiraTickets || []).filter(t => t.key).length > 0 ? `
           <div style="margin:8px 0 12px;padding:8px 12px;background:#F0F4FA;border:1px solid #DDE5F0;border-radius:6px;font-size:12.5px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;">
-            <span style="color:#6B7280;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-right:4px;">Tickets Jira :</span>
+            <span style="color:#6B7280;font-size:11.5px;text-transform:uppercase;letter-spacing:0.04em;font-weight:600;margin-right:4px;">${escapeHtml(ticketsLabel())} :</span>
             ${(c.jiraTickets || []).filter(t => t.key).map(t => {
               const label = escapeHtml(t.key) + (t.summary ? ' — ' + escapeHtml(t.summary) : '');
               const url = jiraUrlFor(t.key);
@@ -479,7 +479,7 @@ function exportPlanCsv(planId) {
     'Plan', 'Ordre', "Type d'élément", 'Suite', 'Titre',
     'Étapes', 'Dossier', 'Environnements', 'Types', 'CRUD',
     'Prêt', 'Automatisé', 'À automatiser', 'Interface',
-    'Temps estimé (min)', 'Niveau requis', 'Divisions métier', 'Tickets Jira'
+    'Temps estimé (min)', 'Niveau requis', 'Divisions métier', ticketsLabel()
   ];
   const rows = [headers.map(csvEscape).join(SEP)];
 
@@ -544,7 +544,7 @@ function exportPlanCsvChooser() {
   if (state.testPlans.length === 0) { toast('Créez d\'abord un plan'); return; }
   openModal('Exporter un plan en CSV', `
     <p style="margin:0 0 12px;font-size:13px;color:var(--text-soft);">
-      Une ligne par cas de test, avec les étapes regroupées dans une seule colonne (multi-lignes). Séparateur <code>;</code>, UTF-8 — prêt pour import Jira ou Excel.
+      Une ligne par cas de test, avec les étapes regroupées dans une seule colonne (multi-lignes). Séparateur <code>;</code>, UTF-8 — prêt pour un import dans un outil de tickets ou Excel.
     </p>
     <div class="picker">
       ${state.testPlans.map(p => `
@@ -782,6 +782,7 @@ function generateChecklist(item, kind, tester, date, projectId) {
     assignedDate: date,
     project: projectName,
     projectId: projectId || null,
+    ticketsLabel: ticketsLabel(),
     generatedAt: new Date().toISOString(),
     dataTables: usedTables,
     structure,
@@ -1710,7 +1711,7 @@ function renderCases() {
 
     if (c.jiraTickets && c.jiraTickets.length > 0) {
       html += '<div class="jira-strip">';
-      html += '<span class="jira-strip-label">Jira :</span>';
+      html += '<span class="jira-strip-label">' + esc(DATA.ticketsLabel || "Tickets") + ' :</span>';
       c.jiraTickets.forEach(function (t) {
         var label = esc(t.key) + (t.summary ? ' — ' + esc(t.summary) : '');
         if (t.url) {

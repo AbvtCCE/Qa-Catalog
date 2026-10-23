@@ -2,8 +2,9 @@
    Fait partie de l'application principale (index.html). L'ordre de chargement
    des <script> compte : voir index.html. Ne pas ouvrir isolément. */
 /* ===== Changement, entry / exit criteria et test completion report d'un test plan =====
-   Plan qualité, semaine 3 : « Dans chaque test plan : entry et exit criteria, numéro du
-   changement ServiceNow, et un test completion report généré, prêt pour le CAB. »
+   Plan qualité, semaine 3, rendu générique (l'outil des changements se configure dans
+   « Outils reliés ») : « Dans chaque test plan : entry et exit criteria, référence du
+   changement, et un test completion report généré, prêt pour le CAB. »
    - Sur le test plan : changeNumber, riskLevel, kind (nature, d'après la Test strategy).
    - plan.deliveries : livraisons reçues en test, contrôlées avec les entry criteria du
      modèle « Entry et exit criteria » (S3-1), décision et jours de test perdus (S3-6).
@@ -60,6 +61,12 @@ const crLabel = (list, id) => (list.find(x => x.id === id) || {}).label || id;
 const crSeverityLabel = id => (WR_SEVERITY_ROWS.find(s => s.id === id) || {}).label || id;
 const crKindRank = id => (CR_PLAN_KINDS.find(k => k.id === id) || { rank: 0 }).rank;
 const crPlanById = id => state.testPlans.find(p => p.id === id);
+/* Référence du changement, en lien si l'outil des changements a un modèle de lien (Outils reliés). */
+function crChangeRefHtml(ref) {
+  if (!ref) return '[référence du changement]';
+  const url = toolUrl('changes', ref);
+  return url ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(ref)}</a>` : escapeHtml(ref);
+}
 
 /* Entry criteria non remplis d'une livraison */
 function deliveryMissingCriteria(dlv) {
@@ -138,7 +145,9 @@ function completionReportData(plan, rep) {
   const openDefects = (state.anomalies || [])
     .filter(a => anomalyIsOpen(a) && (a.testCaseIds || []).some(id => scopeIds.has(id)))
     .sort((a, b) => CR_SEVERITY_ORDER.indexOf(a.severity) - CR_SEVERITY_ORDER.indexOf(b.severity));
-  const decision = a => String((rep.decisions || {})[a.id] || '').trim();
+  // Décision saisie dans le rapport ; à défaut, celle d'un defect Deferred (risque accepté nommé)
+  const decision = a => String((rep.decisions || {})[a.id] || '').trim()
+    || (a.state === 'deferred' && a.deferredBy ? `Deferred : risque accepté par ${a.deferredBy}${a.deferredUntil ? ` jusqu’au ${wrFmt(a.deferredUntil)}` : ''}` : '');
 
   const delivery = (plan.deliveries || []).find(x => x.id === rep.deliveryId) || null;
   const regRun = runs.find(r => r.id === rep.regressionRunId) || null;
@@ -205,6 +214,7 @@ function completionReportData(plan, rep) {
 
   return {
     risk, scopeCases, passed, failed, blocked, executed, untested, openDefects,
+    decisionFor: Object.fromEntries(openDefects.map(a => [a.id, decision(a)])),
     delivery, regRun, regCounts, criteria, notMet, conditions, proposal,
     runsInScope: runs.filter(r => (r.results || []).some(x => scopeIds.has(x.caseId)) || r.id === rep.regressionRunId),
   };
@@ -220,7 +230,7 @@ function crDeliveryLabel(d) {
   return `${d.version || '(sans version)'} (reçue le ${d.receivedAt ? wrFmt(d.receivedAt) : '–'}, ${crLabel(CR_DELIVERY_DECISIONS, d.decision).toLowerCase()})`;
 }
 
-/* Le rapport en HTML sémantique : il se colle tel quel dans Confluence ou dans ServiceNow. */
+/* Le rapport en HTML sémantique : il se colle tel quel dans un wiki ou dans l'outil des changements. */
 function completionReportHtml(plan, rep, d) {
   const txt = t => escapeHtml(t || '').replace(/\n/g, '<br>');
   const cell = 'border:1px solid #ccc;padding:4px 8px;vertical-align:top;';
@@ -230,7 +240,7 @@ function completionReportHtml(plan, rep, d) {
   const shown = d.untested.slice(0, 30);
   return `
     <h1>Test completion report</h1>
-    <p>Changement : <strong>${escapeHtml(plan.changeNumber || '[numéro ServiceNow]')}</strong>. Livraison : ${escapeHtml(crDeliveryLabel(d.delivery))}. Date : ${rep.reportDate ? wrFmt(rep.reportDate) : '–'}.<br>
+    <p>Changement : <strong>${crChangeRefHtml(plan.changeNumber)}</strong>. Livraison : ${escapeHtml(crDeliveryLabel(d.delivery))}. Date : ${rep.reportDate ? wrFmt(rep.reportDate) : '–'}.<br>
        Test plan : ${escapeHtml(planDisplayTitle(plan))}. Risk level : ${escapeHtml(crLabel(CR_RISK_LEVELS, d.risk))}.</p>
     <h2>Ce qui a été testé</h2>
     <p>${d.scopeCases.length} test case${d.scopeCases.length > 1 ? 's' : ''} prévu${d.scopeCases.length > 1 ? 's' : ''} dans le test plan.</p>
@@ -240,7 +250,7 @@ function completionReportHtml(plan, rep, d) {
     <h2>Résultats</h2>
     ${table(['Exécutés', 'Passed', 'Failed', 'Blocked', 'Regression testing'], [[d.executed, d.passed, d.failed, d.blocked, d.regRun ? crEvidenceLine(d.regRun) : 'Non fournie']])}
     <h2>Defects ouverts</h2>
-    ${d.openDefects.length ? table(['Defect', 'Severity', 'Contournement', 'Décision'], d.openDefects.map(a => [a.title || '(sans titre)', crSeverityLabel(a.severity), a.workaround || '–', (rep.decisions || {})[a.id] || '–'])) : '<p>Aucun defect ouvert sur ce test plan.</p>'}
+    ${d.openDefects.length ? table(['Defect', 'Severity', 'Contournement', 'Décision'], d.openDefects.map(a => [a.title || '(sans titre)', crSeverityLabel(a.severity), a.workaround || '–', d.decisionFor[a.id] || '–'])) : '<p>Aucun defect ouvert sur ce test plan.</p>'}
     <h2>Exit criteria</h2>
     ${table(['Criterion', `Exigé (risque ${crLabel(CR_RISK_LEVELS, d.risk).toLowerCase()})`, 'Constat', 'Statut'], d.criteria.map(c => [c.label, c.required, c.detail, CR_STATUS_LABELS[c.status]]))}
     <p>${d.notMet.length ? `Non atteints : ${d.notMet.map(c => escapeHtml(c.label)).join(', ')}. Le CAB décide : report, ou mise en production avec un risque accepté par une personne nommée.` : 'Tous les exit criteria sont atteints.'}</p>
@@ -265,7 +275,7 @@ function completionReportMarkdown(plan, rep, d) {
   const shown = d.untested.slice(0, 30);
   return [
     '# Test completion report', '',
-    `Changement : **${plan.changeNumber || '[numéro ServiceNow]'}**. Livraison : ${crDeliveryLabel(d.delivery)}. Date : ${rep.reportDate ? wrFmt(rep.reportDate) : '–'}.`,
+    `Changement : **${plan.changeNumber || '[référence du changement]'}**. Livraison : ${crDeliveryLabel(d.delivery)}. Date : ${rep.reportDate ? wrFmt(rep.reportDate) : '–'}.`,
     `Test plan : ${planDisplayTitle(plan)}. Risk level : ${crLabel(CR_RISK_LEVELS, d.risk)}.`, '',
     '## Ce qui a été testé', '',
     `${d.scopeCases.length} test case(s) prévu(s) dans le test plan.`, '',
@@ -277,7 +287,7 @@ function completionReportMarkdown(plan, rep, d) {
     '## Résultats', '',
     table(['Exécutés', 'Passed', 'Failed', 'Blocked', 'Regression testing'], [[d.executed, d.passed, d.failed, d.blocked, d.regRun ? crEvidenceLine(d.regRun) : 'Non fournie']]), '',
     '## Defects ouverts', '',
-    d.openDefects.length ? table(['Defect', 'Severity', 'Contournement', 'Décision'], d.openDefects.map(a => [a.title || '(sans titre)', crSeverityLabel(a.severity), a.workaround || '–', (rep.decisions || {})[a.id] || '–'])) : 'Aucun defect ouvert sur ce test plan.', '',
+    d.openDefects.length ? table(['Defect', 'Severity', 'Contournement', 'Décision'], d.openDefects.map(a => [a.title || '(sans titre)', crSeverityLabel(a.severity), a.workaround || '–', d.decisionFor[a.id] || '–'])) : 'Aucun defect ouvert sur ce test plan.', '',
     '## Exit criteria', '',
     table(['Criterion', `Exigé (risque ${crLabel(CR_RISK_LEVELS, d.risk).toLowerCase()})`, 'Constat', 'Statut'], d.criteria.map(c => [c.label, c.required, c.detail, CR_STATUS_LABELS[c.status]])), '',
     d.notMet.length ? `Non atteints : ${d.notMet.map(c => c.label).join(', ')}. Le CAB décide : report, ou mise en production avec un risque accepté par une personne nommée.` : 'Tous les exit criteria sont atteints.', '',
@@ -329,12 +339,12 @@ function openPlanCriteriaModal(planId) {
 
   openModal(`Changement et criteria · ${planDisplayTitle(plan)}`, `
     <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px;">
-      <span class="badge ${plan.changeNumber ? 'badge-primary' : 'badge-muted'}">Changement : ${escapeHtml(plan.changeNumber || 'non renseigné')}</span>
+      <span class="badge ${plan.changeNumber ? 'badge-primary' : 'badge-muted'}">Changement : ${plan.changeNumber ? crChangeRefHtml(plan.changeNumber) : 'non renseigné'}</span>
       <span class="badge ${risk ? '' : 'badge-warning'}">Risk level : ${escapeHtml(risk ? crLabel(CR_RISK_LEVELS, risk) : 'non renseigné')}</span>
       <span class="badge">Nature : ${escapeHtml(crLabel(CR_PLAN_KINDS, plan.kind || 'change'))}</span>
       ${canEdit ? '<button class="btn btn-sm" id="pc-edit-plan">Modifier dans le plan</button>' : ''}
     </div>
-    ${!plan.changeNumber || !risk ? '<p style="font-size:12px;color:#8a6a25;margin:0 0 8px;">Renseignez le numéro du changement ServiceNow et le risk level dans le plan : les exit criteria et le test completion report en dépendent.</p>' : ''}
+    ${!plan.changeNumber || !risk ? '<p style="font-size:12px;color:#8a6a25;margin:0 0 8px;">Renseignez la référence du changement et le risk level dans le plan : les exit criteria et le test completion report en dépendent.</p>' : ''}
 
     <h3 style="font-size:14px;margin:16px 0 6px;">Livraisons reçues en test <span style="font-weight:400;color:var(--text-muted);font-size:12px;">· entry criteria</span></h3>
     ${deliveries.length === 0 ? '<p style="font-size:12.5px;color:var(--text-muted);font-style:italic;margin:0;">Aucune livraison enregistrée.</p>' : `
@@ -493,14 +503,14 @@ function openCompletionReportEditor(planId, reportId) {
       ${backBtn}
       ${canEdit ? '<button class="btn btn-danger" id="cr-delete">Supprimer</button>' : ''}
       <button class="btn" id="cr-md">Télécharger (.md)</button>
-      <button class="btn btn-primary" id="cr-copy">Copier pour Confluence</button>
+      <button class="btn btn-primary" id="cr-copy" title="Colle titres et tableaux dans un wiki, un e-mail ou un document">Copier le rapport</button>
     `);
     document.getElementById('modal').classList.add('modal-wide');
     document.getElementById('cr-back').onclick = () => openPlanCriteriaModal(planId);
     document.getElementById('cr-md').onclick = () => crDownloadMarkdown(plan, rep.snapshot.markdown);
     document.getElementById('cr-copy').onclick = async () => {
       const ok = await copyRichText(rep.snapshot.html, rep.snapshot.markdown);
-      toast(ok ? 'Rapport copié : collez-le dans Confluence ou joignez-le au changement' : 'Copie impossible : utilisez « Télécharger (.md) »');
+      toast(ok ? 'Rapport copié : collez-le dans votre wiki ou joignez-le au changement' : 'Copie impossible : utilisez « Télécharger (.md) »');
     };
     if (canEdit) document.getElementById('cr-delete').onclick = () => {
       confirmDialog('Supprimer ce test completion report figé ? S’il a été remis au CAB, gardez-en une copie.', () => {
@@ -574,7 +584,7 @@ function openCompletionReportEditor(planId, reportId) {
   `, `
     ${backBtn}
     <button class="btn" id="cr-md">Télécharger (.md)</button>
-    <button class="btn" id="cr-copy">Copier pour Confluence</button>
+    <button class="btn" id="cr-copy" title="Colle titres et tableaux dans un wiki, un e-mail ou un document">Copier le rapport</button>
     ${canEdit ? '<button class="btn" id="cr-save">Enregistrer le brouillon</button><button class="btn btn-primary" id="cr-freeze">Figer pour le CAB</button>' : ''}
   `);
   document.getElementById('modal').classList.add('modal-wide');
@@ -629,7 +639,7 @@ function openCompletionReportEditor(planId, reportId) {
     toast('Brouillon enregistré');
   };
   document.getElementById('cr-freeze').onclick = () => {
-    if (!plan.changeNumber) { toast('Renseignez le numéro du changement ServiceNow dans le plan avant de figer'); return; }
+    if (!plan.changeNumber) { toast('Renseignez la référence du changement dans le plan avant de figer'); return; }
     refresh();
     crUpsert(plan, 'completionReports', rep);   // le brouillon est gardé même si l'on annule
     confirmDialog(`Figer le test completion report du changement ${plan.changeNumber} ? Les chiffres et le texte ne bougeront plus.`, () => {

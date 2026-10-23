@@ -103,8 +103,10 @@ function weeklyReportData(p, weekStart) {
   const notRun = planned.length - executed - blocked;
 
   // Defects par severity
-  const created = a => new Date(a.createdAt);
+  // Nouveaux : date de détection ; corrigés : passage en Ready for retest (fixedAt), sinon la clôture
+  const created = a => new Date(a.detectedAt ? a.detectedAt + 'T12:00:00' : a.createdAt);
   const resolved = a => (a.resolvedAt ? new Date(a.resolvedAt) : null);
+  const fixed = a => (a.fixedAt ? new Date(a.fixedAt) : (a.state === 'closed' ? resolved(a) : null));
   const openAt = a => created(a) <= ref && (anomalyIsOpen(a) || (resolved(a) && resolved(a) > ref));
   const defects = WR_SEVERITY_ROWS.map(sev => {
     const list = s.linkedAnomalies.filter(a => a.severity === sev.id);
@@ -112,7 +114,7 @@ function weeklyReportData(p, weekStart) {
     return {
       label: sev.label,
       created: list.filter(a => created(a) >= start && created(a) <= end).length,
-      fixed: list.filter(a => resolved(a) && resolved(a) >= start && resolved(a) <= end).length,
+      fixed: list.filter(a => fixed(a) && fixed(a) >= start && fixed(a) <= end).length,
       open: open.length,
       oldestDays: open.length ? Math.max(...open.map(a => Math.floor((ref - created(a)) / 86400000))) : null,
     };
@@ -181,7 +183,7 @@ function wrDeliveryLine(x) {
     + (x.missing.length ? ` ; entry criteria manquants : ${x.missing.join(' ')}` : '');
 }
 
-/* Le rapport en HTML sémantique (titres, tableaux, listes) : il se colle tel quel dans Confluence. */
+/* Le rapport en HTML sémantique (titres, tableaux, listes) : il se colle tel quel dans un wiki, un e-mail ou un document. */
 function weeklyReportHtml(d, notes) {
   const txt = t => escapeHtml(t || '').replace(/\n/g, '<br>');
   const cell = 'border:1px solid #ccc;padding:4px 8px;';
@@ -238,7 +240,7 @@ function weeklyReportMarkdown(d, notes) {
   return lines.join('\n');
 }
 
-/* Copie riche (HTML + texte) pour un collage propre dans Confluence ; repli execCommand. */
+/* Copie riche (HTML + texte) pour un collage propre dans un wiki ; repli execCommand. */
 async function copyRichText(html, text) {
   try {
     if (navigator.clipboard && window.ClipboardItem) {
@@ -321,7 +323,7 @@ function openWeeklyReportModal(projectId, weekStart) {
     <button class="btn" data-close-modal>Fermer</button>
     <button class="btn" id="wr-md">Télécharger (.md)</button>
     ${canSave ? '<button class="btn" id="wr-save">Enregistrer les notes</button>' : ''}
-    <button class="btn btn-primary" id="wr-copy">Copier pour Confluence</button>
+    <button class="btn btn-primary" id="wr-copy" title="Colle titres et tableaux dans un wiki, un e-mail ou un document">Copier le rapport</button>
   `);
   document.getElementById('modal').classList.add('modal-wide');
 
@@ -356,7 +358,7 @@ function openWeeklyReportModal(projectId, weekStart) {
     persistNotes();
     const notes = readNotes();
     const ok = await copyRichText(weeklyReportHtml(d, notes), weeklyReportMarkdown(d, notes));
-    toast(ok ? 'Rapport copié : collez-le dans une page Confluence' : 'Copie impossible : utilisez « Télécharger (.md) »');
+    toast(ok ? 'Rapport copié : collez-le dans votre wiki ou un e-mail' : 'Copie impossible : utilisez « Télécharger (.md) »');
   };
   document.getElementById('wr-md').onclick = () => {
     persistNotes();

@@ -83,21 +83,74 @@ const ANOMALY_TYPES = [
   { id: 'documentation',  label: 'Documentation',  desc: "Documentation utilisateur ou technique manquante, erronée ou non synchronisée avec le produit." },
 ];
 
+/* Defect management (modèle du plan qualité, S4) : severity = l'impact ; priority = l'urgence
+   de la correction, fixée au defect triage, indépendamment de la severity. Les identifiants
+   historiques (critical, major, minor, trivial) sont gardés, seuls les libellés suivent le modèle. */
 const ANOMALY_SEVERITIES = [
-  { id: 'critical', label: 'Critique', desc: "Bloque une fonctionnalité métier majeure, pas de contournement viable." },
-  { id: 'major',    label: 'Majeure',  desc: "Fonctionnalité dégradée, contournement possible mais coûteux." },
-  { id: 'minor',    label: 'Mineure',  desc: "Gêne ponctuelle, contournement simple." },
-  { id: 'trivial',  label: 'Triviale', desc: "Cosmétique ou très marginal." },
+  { id: 'critical', label: 'Blocker',  desc: "Un processus critique est impossible, sans contournement." },
+  { id: 'major',    label: 'Major',    desc: "Un processus important donne un résultat faux ou s'arrête ; un contournement existe, mais il coûte." },
+  { id: 'minor',    label: 'Minor',    desc: "Un défaut gênant, sans effet sur les résultats." },
+  { id: 'trivial',  label: 'Cosmetic', desc: "Présentation ou libellé." },
 ];
 
+const ANOMALY_PRIORITIES = [
+  { id: 'p1', label: 'P1 · immédiate', desc: "Correction sans attendre (correctif urgent)." },
+  { id: 'p2', label: 'P2 · prochaine livraison', desc: "À corriger pour la prochaine livraison." },
+  { id: 'p3', label: 'P3 · planifiée', desc: "À planifier dans une livraison ultérieure." },
+  { id: 'p4', label: 'P4 · quand possible', desc: "Sans échéance." },
+];
+
+/* Defect lifecycle du modèle : état, qui agit, ce qu'il faut faire. */
 const ANOMALY_STATES = [
-  { id: 'discovered',           label: 'Découverte',                       kind: 'open' },
-  { id: 'in_progress',          label: 'En cours de résolution',           kind: 'open' },
-  { id: 'workaround_pending',   label: 'Contournée — en attente correctif',kind: 'open' },
-  { id: 'workaround_accepted',  label: 'Contournée — ROI nul de résolution',kind: 'closed' },
-  { id: 'fixed',                label: 'Résolue',                          kind: 'closed' },
-  { id: 'closed',               label: 'Fermée — vérifiée',                kind: 'closed' },
-  { id: 'rejected',             label: 'Rejetée (non-anomalie)',           kind: 'closed' },
+  { id: 'new',              label: 'New',              kind: 'open',   who: 'Celui qui le trouve',     todo: 'Remplir le defect report complet.' },
+  { id: 'triaged',          label: 'Triaged',          kind: 'open',   who: 'QA, au defect triage',    todo: 'Confirmer, fixer la severity et la priority, assigner.' },
+  { id: 'in_fix',           label: 'In fix',           kind: 'open',   who: 'Développeur ou éditeur',  todo: 'Corriger, indiquer la version qui contient la correction.' },
+  { id: 'ready_for_retest', label: 'Ready for retest', kind: 'open',   who: 'Développeur ou éditeur',  todo: 'Installer la correction dans le test environment.' },
+  { id: 'reopened',         label: 'Reopened',         kind: 'open',   who: 'QA',                      todo: 'Donner le motif de réouverture.' },
+  { id: 'deferred',         label: 'Deferred',         kind: 'open',   who: 'Au defect triage',        todo: 'Nommer qui accepte le risque, et jusqu’à quand.' },
+  { id: 'closed',           label: 'Closed',           kind: 'closed', who: 'QA',                      todo: 'Faire le confirmation testing, rejouer la targeted regression, noter la root cause.' },
+  { id: 'rejected',         label: 'Rejected',         kind: 'closed', who: 'Au defect triage',        todo: 'Donner le motif : doublon, pas un defect, non reproductible.' },
+];
+/* Transitions permises (l'état courant reste toujours sélectionnable). */
+const ANOMALY_TRANSITIONS = {
+  new: ['triaged', 'rejected'],
+  triaged: ['in_fix', 'deferred', 'rejected'],
+  in_fix: ['ready_for_retest', 'deferred'],
+  ready_for_retest: ['closed', 'reopened'],
+  reopened: ['in_fix', 'deferred', 'rejected'],
+  deferred: ['triaged'],
+  closed: ['reopened'],
+  rejected: ['new'],
+};
+const ANOMALY_REOPEN_REASONS = [
+  { id: 'incomplete_fix', label: 'Correction incomplète' },
+  { id: 'regression', label: 'Régression causée par la correction' },
+  { id: 'fix_missing', label: 'Correction absente du test environment' },
+  { id: 'expected_misunderstood', label: 'Malentendu sur l’expected result' },
+  { id: 'env_or_data', label: 'Test environment ou test data' },
+];
+const ANOMALY_REJECT_REASONS = [
+  { id: 'duplicate', label: 'Doublon' },
+  { id: 'not_a_defect', label: 'Pas un defect' },
+  { id: 'not_reproducible', label: 'Non reproductible' },
+];
+const ANOMALY_ROOT_CAUSES = [
+  { id: 'requirement', label: 'Exigence' },
+  { id: 'design', label: 'Conception' },
+  { id: 'code', label: 'Code' },
+  { id: 'configuration', label: 'Paramétrage' },
+  { id: 'test_data', label: 'Test data' },
+  { id: 'test_environment', label: 'Test environment' },
+  { id: 'test', label: 'Test (false positive)' },
+];
+/* Champs obligatoires du defect report : « Un defect incomplet reste à l'état New. » */
+const DEFECT_REPORT_REQUIRED = [
+  { key: 'title', label: 'Titre' },
+  { key: 'environmentId', label: 'Test environment' },
+  { key: 'testedVersion', label: 'Version testée' },
+  { key: 'stepsToReproduce', label: 'Étapes pour reproduire' },
+  { key: 'expectedResult', label: 'Expected result' },
+  { key: 'actualResult', label: 'Actual result' },
 ];
 
 /* ===== CRUD operations =====

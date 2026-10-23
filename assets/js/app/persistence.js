@@ -347,6 +347,22 @@ async function load() {
     state.testPlans = (state.testPlans || []).map(migratePlan);
     // Ensure anomalies array exists (older saves predate this feature)
     if (!Array.isArray(state.anomalies)) state.anomalies = [];
+    // Defect management (S4) : anciens états maison → lifecycle du modèle (idempotent).
+    // Les anomalies « Résolue » de l'ancien modèle étaient considérées comme fermées : elles
+    // passent Closed, marquées legacyClosure (confirmation testing et root cause non tracés).
+    const LEGACY_STATES = { discovered: 'new', in_progress: 'in_fix', workaround_pending: 'in_fix', workaround_accepted: 'deferred', fixed: 'closed' };
+    state.anomalies.forEach(a => {
+      if (LEGACY_STATES[a.state]) {
+        if (a.state === 'fixed') a.legacyClosure = true;
+        if (a.state === 'workaround_accepted' && !a.deferredReason) a.deferredReason = a.workaround || 'Contournement accepté (ancien modèle)';
+        a.state = LEGACY_STATES[a.state];
+      }
+      if ((a.state === 'closed' || a.state === 'rejected') && !a.rootCause && !a.rejectReason) a.legacyClosure = true;
+      if (!Array.isArray(a.history)) a.history = [];
+      if (typeof a.priority !== 'string') a.priority = '';
+      if (!a.detectedAt) a.detectedAt = (a.createdAt || new Date().toISOString()).slice(0, 10);
+      if (a.state === 'closed' && !a.fixedAt && a.resolvedAt) a.fixedAt = a.resolvedAt;
+    });
     // Migrate single state.project → state.projects array (idempotent)
     if (!Array.isArray(state.projects)) state.projects = [];
     if (state.project && (state.project.name || state.project.startDate || state.project.endDate)) {
@@ -430,6 +446,11 @@ async function load() {
     // Settings (global config like Jira base URL)
     if (!state.settings || typeof state.settings !== 'object') state.settings = {};
     if (typeof state.settings.jiraBaseUrl !== 'string') state.settings.jiraBaseUrl = '';
+    // Outils reliés génériques : l'ancien réglage « Lien Jira » devient l'outil des exigences (idempotent)
+    if (!state.settings.tools || typeof state.settings.tools !== 'object') state.settings.tools = {};
+    if (!state.settings.tools.requirements && state.settings.jiraBaseUrl) {
+      state.settings.tools.requirements = { name: 'Jira', urlTemplate: state.settings.jiraBaseUrl.replace(/\/+$/, '') + '/browse/{ref}' };
+    }
     // Executions importees des checklists (collection apparue avec l'import des resultats)
     if (!Array.isArray(state.testRuns)) state.testRuns = [];
     // Migrate: ensure toAutomate (decision flag) exists. If absent, mirror `automated`.
