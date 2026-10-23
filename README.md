@@ -35,6 +35,7 @@ Le navigateur lit et écrit `data.json` directement par l'API GitHub, avec le je
 | `assets/js/app/renderers.js` | Tous les écrans |
 | `assets/js/app/reports-export.js` | Exports, checklist testeur, spec imprimable |
 | `assets/js/app/free-report.js` | Générateur de rapports |
+| `assets/js/app/test-env-data.js` | Journal d’indisponibilité des test environments, fiche copiable, circuit des test data requests, catalogue des test data sets |
 | `assets/js/app/risks.js` | Onglet Risques : product risk analysis (likelihood × impact), priorité des test cases dérivée du risque, sélection des regression tests par le risque |
 | `assets/js/app/weekly-report.js` | Weekly test progress report d'un projet (calcul, aperçu, copie pour Confluence, .md) |
 | `assets/js/app/completion-report.js` | Dans chaque test plan : référence du changement, livraisons et entry criteria, exit criteria (et leurs adaptations), test completion report figé pour le CAB |
@@ -103,14 +104,16 @@ Sans configuration, les références restent du texte et les libellés sont neut
 | `testPlans` | id, title, items[{type: suite ou case, id}], testCaseIds, divisionIds, changeNumber (ServiceNow), riskLevel (low, medium, high), kind (change, smoke, targeted, full), deliveries[{id, version, receivedAt, checks{6 entry criteria}, decision (accepted, accepted_with_reserve, refused), lostDays, note}], exitAdaptations{criterion : {text, reason}}, completionReports[{id, reportDate, deliveryId, regressionRunId, priorityConfirmed, manualStatus, untestedReason, decisions{anomalyId : texte}, risks, recommendation, recommendationText, uatName, uatDate, evidenceLinks, frozenAt, frozenBy, snapshot{html, markdown, changeNumber, riskLevel, recommendation, criteria}}] |
 | `projects` | id, name, startDate, endDate, planIds, weeklyNotes{lundi AAAA-MM-JJ : {status, reason, blockers, lostDays, risks, next}} |
 | `anomalies` | defect management (modèle du plan, S4) : id, title, state (new, triaged, in_fix, ready_for_retest, reopened, deferred, closed, rejected ; transitions dans `ANOMALY_TRANSITIONS`), severity (Blocker, Major, Minor, Cosmetic), priority (p1 à p4, fixée au triage), type, assignee, detectedAt ; defect report : environmentId, testedVersion, changeRef, externalRef, stepsToReproduce, expectedResult, testOracle, actualResult, evidence, testDataUsed ; fixVersion, deferredBy, deferredUntil, deferredReason, rejectReason, reopenReason, rootCause, rootCauseNote, confirmationTested, targetedRegressionDone ; history[{at, by, from, to, reason}], fixedAt, resolvedAt, legacyClosure ; testCaseIds, workaround, solution, peopleInvolved, jiraTickets, screenshots, description, createdAt |
-| `environments` | id, title, address |
+| `environments` | id, title, address ; fiche : role, owner, systems, interfaces, lastRefresh, refreshFrequency, prodGaps, usageRules ; outages[{id, date, hours, cause, blockedTests, lostDays}] |
+| `testDataRequests` | id, number (TDR-001…), status (requested, in_progress, delivered, refused), projectId, planId, forWhat, environmentId, objects, neededBy, usageDuration, consumed, confidentialityOk, requester, provider, requestedAt, deliveredAt, note |
+| `testDataSets` | id, process, objects, howToGet, provider, leadTime |
 | `dataTables` | id, name, columns[{id, name}], rows ; utilisées dans les steps par `{{table.colonne}}` |
 | `stepBlocks` | id, name, steps (blocs de steps réutilisables) |
 | `testers`, `testerLevels` | testeurs (name, levelId, divisionIds, notes) et niveaux (name, order, divisionId) |
 | `businessDivisions` | id, name, parentId (un niveau de sous-division) |
 | `testRuns` | exécutions importées des checklists : id (= sessionId de la checklist), sourceType (plan ou suite), sourceId, projectId, tester, assignedDate, exportedAt, importedAt, importedBy, results[{caseId, outcome (passed, failed, blocked, not_run), blockedReason, remarks, stepRemarks, stepsDone, stepsTotal, startedAt, finishedAt, durationMin, durationEdited}] |
 | `productRisks` | id, code (R-01…), divisionId, domain, title (ce qui pourrait mal tourner), likelihood (1 à 3), impact (1 à 3), testCaseIds, technique, notes ; risk level = likelihood × impact : élevé 6 ou 9 (P1), moyen 3 ou 4 (P2), faible 1 ou 2 (P3) |
-| `settings` | riskAnalysis{participants, date, review} ; tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
+| `settings` | testData{usualDelayDays, sendTo} ; riskAnalysis{participants, date, review} ; tools{requirements, changes, defects, automation : {name, urlTemplate avec {ref}}} ; jiraBaseUrl (ancien réglage, repris dans tools.requirements) |
 
 Les listes de référence (types de test, types, sévérités et états d'anomalie, CRUD) sont dans `data-model.js`. Les migrations de données sont dans `load()` de `persistence.js` ; elles sont idempotentes.
 

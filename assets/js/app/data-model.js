@@ -184,6 +184,8 @@ let state = {
   stepBlocks: [],
   testRuns: [],          // executions importees depuis les checklists (voir importRunResultsFile)
   productRisks: [],      // product risk analysis (voir risks.js)
+  testDataRequests: [],  // circuit des test data requests (voir test-env-data.js)
+  testDataSets: [],      // catalogue des test data sets par processus
   settings: { jiraBaseUrl: '' },
 };
 

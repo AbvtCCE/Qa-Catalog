@@ -455,6 +455,10 @@ async function load() {
     if (!Array.isArray(state.testRuns)) state.testRuns = [];
     // Product risk analysis (S5)
     if (!Array.isArray(state.productRisks)) state.productRisks = [];
+    // Test environments et test data (S6)
+    if (!Array.isArray(state.testDataRequests)) state.testDataRequests = [];
+    if (!Array.isArray(state.testDataSets)) state.testDataSets = [];
+    (state.environments || []).forEach(e => { if (!Array.isArray(e.outages)) e.outages = []; });
     // Migrate: ensure toAutomate (decision flag) exists. If absent, mirror `automated`.
     state.testCases.forEach(c => {
       if (typeof c.toAutomate !== 'boolean') c.toAutomate = !!c.automated;

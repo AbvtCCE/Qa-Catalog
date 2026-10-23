@@ -311,12 +311,18 @@ function renderEnvironments(view) {
                 ${e.address ? `<div style="font-size:12.5px;color:var(--text-soft);font-family:var(--font-mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(e.address)}</div>` : ''}
               </div>
               <div style="display:flex;gap:2px;flex-shrink:0;">
+                <button class="btn-icon btn-ghost" data-env-outages="${e.id}" title="Journal d’indisponibilité">${ICON.alert}</button>
+                <button class="btn-icon btn-ghost" data-env-copy="${e.id}" title="Copier la fiche (wiki, e-mail)">${ICON.export}</button>
                 <button class="btn-icon btn-ghost" data-edit-env="${e.id}" title="Modifier">${ICON.edit}</button>
                 <button class="btn-icon btn-ghost" data-delete-env="${e.id}" title="Supprimer">${ICON.trash}</button>
               </div>
             </div>
             <div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--border);font-size:12px;color:var(--text-soft);">
               <span class="badge">${counts[e.id] || 0} cas associés</span>
+              ${e.owner ? `<span class="badge" title="Responsable">${escapeHtml(e.owner)}</span>` : ''}
+              ${e.lastRefresh ? `<span class="badge" title="Dernier refresh">refresh ${escapeHtml(wrFmt(e.lastRefresh))}</span>` : ''}
+              ${(() => { const m = envOutagesIn(e, wrIso(new Date()).slice(0, 7) + '-01', wrIso(new Date()).slice(0, 7) + '-31'); return m.length ? `<span class="badge badge-warning" title="Indisponibilités ce mois">${m.length} indispo. ce mois</span>` : ''; })()}
+              ${!e.role && !e.owner ? '<span class="badge badge-muted" title="Rôle et responsable à renseigner (Modifier)">Fiche à compléter</span>' : ''}
             </div>
           </div>
         `).join('')}
@@ -339,6 +345,12 @@ function renderEnvironments(view) {
     toast('Outils reliés enregistrés');
   };
   view.querySelectorAll('[data-edit-env]').forEach(b => b.onclick = () => openEnvironmentModal(b.dataset.editEnv));
+  view.querySelectorAll('[data-env-outages]').forEach(b => b.onclick = () => openEnvOutagesModal(b.dataset.envOutages));
+  view.querySelectorAll('[data-env-copy]').forEach(b => b.onclick = async () => {
+    const env = state.environments.find(x => x.id === b.dataset.envCopy);
+    const ok = await copyRichText(envFicheHtml(env), envFicheMarkdown(env));
+    toast(ok ? 'Fiche copiée' : 'Copie impossible');
+  });
   view.querySelectorAll('[data-delete-env]').forEach(b => b.onclick = () => {
     const id = b.dataset.deleteEnv;
     const used = state.testCases.some(c => c.environmentIds.includes(id));
@@ -363,6 +375,23 @@ function openEnvironmentModal(id) {
       <label class="field-label">Adresse <span class="hint">optionnelle</span></label>
       <input type="text" id="env-address" value="${escapeHtml(env.address || '')}" placeholder="https://recette.example.ch ou serveur:port">
     </div>
+    <div class="form-group" style="margin-bottom:6px;">
+      <label class="field-label">Fiche du test environment <span class="hint">modèle « Test environment : fiche »</span></label>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="field-label">Rôle <span class="hint">test levels qui s’y déroulent</span></label><input type="text" id="env-role" value="${escapeHtml(env.role || '')}" placeholder="System testing, UAT…"></div>
+      <div class="form-group"><label class="field-label">Responsable</label><input type="text" id="env-owner" value="${escapeHtml(env.owner || '')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="field-label">Systèmes et versions</label><input type="text" id="env-systems" value="${escapeHtml(env.systems || '')}"></div>
+      <div class="form-group"><label class="field-label">Interfaces <span class="hint">branchées, simulées ou absentes</span></label><input type="text" id="env-interfaces" value="${escapeHtml(env.interfaces || '')}"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label class="field-label">Dernier refresh</label><input type="date" id="env-refresh" value="${escapeHtml(env.lastRefresh || '')}"></div>
+      <div class="form-group"><label class="field-label">Fréquence du refresh</label><input type="text" id="env-refresh-freq" value="${escapeHtml(env.refreshFrequency || '')}" placeholder="Ex. chaque trimestre"></div>
+    </div>
+    <div class="form-group"><label class="field-label">Écarts connus avec la production</label><textarea id="env-gaps" rows="2">${escapeHtml(env.prodGaps || '')}</textarea></div>
+    <div class="form-group"><label class="field-label">Règles d’utilisation <span class="hint">réservation, fenêtres de déploiement</span></label><textarea id="env-rules" rows="2">${escapeHtml(env.usageRules || '')}</textarea></div>
   `, `
     <button class="btn" data-close-modal>Annuler</button>
     <button class="btn btn-primary" id="env-save">Enregistrer</button>
@@ -372,6 +401,14 @@ function openEnvironmentModal(id) {
       if (!title) { toast('Le titre est requis'); return; }
       env.title = title;
       env.address = document.getElementById('env-address').value.trim();
+      env.role = document.getElementById('env-role').value.trim();
+      env.owner = document.getElementById('env-owner').value.trim();
+      env.systems = document.getElementById('env-systems').value.trim();
+      env.interfaces = document.getElementById('env-interfaces').value.trim();
+      env.lastRefresh = document.getElementById('env-refresh').value;
+      env.refreshFrequency = document.getElementById('env-refresh-freq').value.trim();
+      env.prodGaps = document.getElementById('env-gaps').value.trim();
+      env.usageRules = document.getElementById('env-rules').value.trim();
       if (id) {
         const idx = state.environments.findIndex(e => e.id === id);
         state.environments[idx] = env;
@@ -4495,6 +4532,7 @@ function renderDataTables(view) {
         <button class="btn btn-primary" id="add-table" data-perm="dataTables:create">${ICON.plus}<span>Nouvelle table</span></button>
       </div>
     </div>
+    <div id="td-circuit"></div>
 
     ${tables.length === 0 ? emptyState('Aucune table', 'Créez votre première table. Par exemple « Clients » avec les colonnes Nom, Prénom, Email, ou « Montants » avec une seule colonne Valeur.') : `
       <div class="card-grid">
@@ -4533,6 +4571,8 @@ function renderDataTables(view) {
   `;
 
   document.getElementById('add-table').onclick = () => openDataTableModal();
+  // Circuit des test data requests et catalogue des data sets (S6)
+  renderTestDataCircuit(view.querySelector('#td-circuit'));
   view.querySelectorAll('[data-edit-table]').forEach(b => b.onclick = () => openDataTableModal(b.dataset.editTable));
   view.querySelectorAll('[data-delete-table]').forEach(b => b.onclick = () => {
     const tid = b.dataset.deleteTable;

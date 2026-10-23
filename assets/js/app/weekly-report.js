@@ -131,7 +131,17 @@ function weeklyReportData(p, weekStart) {
       lostDays: Number(dl.lostDays) || 0,
     });
   }));
-  const lostDaysAuto = deliveriesWeek.reduce((a, x) => a + x.lostDays, 0);
+  // Indisponibilités des test environments des test cases du projet (journal, S6-2)
+  const envIds = new Set(planned.flatMap(c => c.environmentIds || []));
+  const outagesWeek = [];
+  (state.environments || []).filter(e => envIds.has(e.id)).forEach(e => envOutagesIn(e, weekStart, weekEnd).forEach(o => outagesWeek.push({
+    env: e.title, date: o.date, hours: Number(o.hours) || 0, cause: o.cause || '', blockedTests: o.blockedTests || '', lostDays: Number(o.lostDays) || 0,
+  })));
+  // Test data requests du projet en retard à la fin de la semaine (S6-5)
+  const tdrLateWeek = (state.testDataRequests || [])
+    .filter(r => (r.projectId === p.id || planSet.has(r.planId)) && r.requestedAt && r.requestedAt <= weekEnd && tdrLate(r, weekEnd))
+    .map(r => ({ number: r.number, objects: r.objects || '', due: tdrDueDate(r) }));
+  const lostDaysAuto = deliveriesWeek.reduce((a, x) => a + x.lostDays, 0) + outagesWeek.reduce((a, x) => a + x.lostDays, 0);
   const nonCompliant = deliveriesWeek.filter(x => !x.compliant);
 
   // État général proposé : à valider ou corriger par la QA
@@ -154,6 +164,11 @@ function weeklyReportData(p, weekStart) {
     if (status === 'on_track') status = 'at_risk';
     why.push(`${blocked} test case${blocked > 1 ? 's' : ''} bloqué${blocked > 1 ? 's' : ''}`);
   }
+  if (outagesWeek.length > 0 || tdrLateWeek.length > 0) {
+    if (status === 'on_track') status = 'at_risk';
+    if (outagesWeek.length) why.push(`${outagesWeek.length} indisponibilité${outagesWeek.length > 1 ? 's' : ''} de test environment`);
+    if (tdrLateWeek.length) why.push(`${tdrLateWeek.length} test data request${tdrLateWeek.length > 1 ? 's' : ''} en retard`);
+  }
   if (nonCompliant.length > 0) {
     if (status === 'on_track') status = 'at_risk';
     why.push(`${nonCompliant.length} livraison${nonCompliant.length > 1 ? 's' : ''} hors entry criteria`);
@@ -166,7 +181,7 @@ function weeklyReportData(p, weekStart) {
     blockedGroups: Object.keys(blockedByReason).map(k => ({
       label: BLOCKED_REASON_LABELS[k] || 'Motif non précisé', cases: blockedByReason[k],
     })),
-    defects, execPct, timePct, deliveriesWeek, nonCompliant, lostDaysAuto,
+    defects, execPct, timePct, deliveriesWeek, nonCompliant, outagesWeek, tdrLateWeek, lostDaysAuto,
     proposal: { status, reason: why.join(' ; ') },
   };
 }
@@ -177,6 +192,16 @@ function wrStatusLabel(id) { return (WR_STATUSES.find(s => s.id === id) || WR_ST
 function wrLostDays(d, notes) {
   if (notes.lostDays !== '' && notes.lostDays != null) return String(notes.lostDays);
   return d.lostDaysAuto ? `${d.lostDaysAuto} (livraisons)` : '–';
+}
+/* Blocages de la semaine, dans l'ordre du modèle : livraisons hors entry criteria, test
+   environments, test data, puis test cases bloqués par motif. */
+function wrBlockerLines(d) {
+  return [
+    ...d.nonCompliant.map(wrDeliveryLine),
+    ...(d.outagesWeek || []).map(o => `Test environment ${o.env} indisponible le ${wrFmt(o.date)}${o.hours ? ` (${o.hours} h)` : ''} : ${o.cause}${o.blockedTests ? ` ; tests bloqués : ${o.blockedTests}` : ''}`),
+    ...(d.tdrLateWeek || []).map(r => `Test data request ${r.number} en retard${r.due ? ` (échéance ${wrFmt(r.due)})` : ''} : ${r.objects}`),
+    ...d.blockedGroups.map(g => `${g.label} : ${g.cases.join(', ')}`),
+  ];
 }
 function wrDeliveryLine(x) {
   return `Livraison ${x.version} (${x.plan}) : ${crLabel(CR_DELIVERY_DECISIONS, x.decision).toLowerCase()}`
@@ -201,8 +226,8 @@ function weeklyReportHtml(d, notes) {
     ${table(['Severity', 'Nouveaux', 'Corrigés', 'Ouverts', 'Plus ancien (jours)'], d.defects.map(r => [r.label, r.created, r.fixed, r.open, r.oldestDays === null ? '–' : r.oldestDays]))}
     <h2>Blocages</h2>
     ${d.deliveriesWeek.length ? `<p>Livraisons reçues en test : ${d.deliveriesWeek.length}, dont ${d.deliveriesWeek.length - d.nonCompliant.length} conforme${d.deliveriesWeek.length - d.nonCompliant.length > 1 ? 's' : ''} aux entry criteria.</p>` : ''}
-    ${d.nonCompliant.length || d.blockedGroups.length ? `<ul>${d.nonCompliant.map(x => `<li>${escapeHtml(wrDeliveryLine(x))}</li>`).join('')}${d.blockedGroups.map(g => `<li>${escapeHtml(g.label)} : ${g.cases.map(escapeHtml).join(', ')}</li>`).join('')}</ul>` : ''}
-    ${notes.blockers ? `<p>${txt(notes.blockers)}</p>` : (d.blockedGroups.length || d.nonCompliant.length ? '' : '<p>Aucun blocage signalé.</p>')}
+    ${wrBlockerLines(d).length ? `<ul>${wrBlockerLines(d).map(l => `<li>${escapeHtml(l)}</li>`).join('')}</ul>` : ''}
+    ${notes.blockers ? `<p>${txt(notes.blockers)}</p>` : (wrBlockerLines(d).length ? '' : '<p>Aucun blocage signalé.</p>')}
     <p>Jours de test perdus : ${escapeHtml(wrLostDays(d, notes))}.</p>
     <h2>Risques et décisions attendues</h2>
     <p>${notes.risks ? txt(notes.risks) : 'Aucune décision attendue.'}</p>
@@ -227,9 +252,8 @@ function weeklyReportMarkdown(d, notes) {
     table(['Severity', 'Nouveaux', 'Corrigés', 'Ouverts', 'Plus ancien (jours)'], d.defects.map(r => [r.label, r.created, r.fixed, r.open, r.oldestDays === null ? '–' : r.oldestDays])), '',
     '## Blocages', '',
     ...(d.deliveriesWeek.length ? [`Livraisons reçues en test : ${d.deliveriesWeek.length}, dont ${d.deliveriesWeek.length - d.nonCompliant.length} conforme(s) aux entry criteria.`, ''] : []),
-    ...d.nonCompliant.map(x => `- ${wrDeliveryLine(x)}`),
-    ...d.blockedGroups.map(g => `- ${g.label} : ${g.cases.join(', ')}`),
-    ...(notes.blockers ? ['', notes.blockers] : (d.blockedGroups.length || d.nonCompliant.length ? [] : ['Aucun blocage signalé.'])), '',
+    ...wrBlockerLines(d).map(l => `- ${l}`),
+    ...(notes.blockers ? ['', notes.blockers] : (wrBlockerLines(d).length ? [] : ['Aucun blocage signalé.'])), '',
     `Jours de test perdus : ${wrLostDays(d, notes)}.`, '',
     '## Risques et décisions attendues', '',
     notes.risks || 'Aucune décision attendue.', '',
